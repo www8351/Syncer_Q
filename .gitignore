@@ -1,1 +1,26 @@
 Vertex_Command-main/replit.md
+
+# ── root backstop: covers the whole tree regardless of subdir ──
+# Secrets / credentials
+**/.env
+**/.env.*
+!**/.env.example
+**/.stripe-keys.json
+**/*.pem
+**/*.key
+**/id_rsa*
+**/*.p12
+
+# Dependencies / build output
+**/node_modules/
+**/dist/
+**/build/
+**/__pycache__/
+**/.venv/
+
+# Logs / runtime / backups
+**/*.log
+**/backups/
+**/*.sql.gz
+**/*.dump
+**/.cache/
