@@ -1,0 +1,111 @@
+groups:
+  - name: vertex_critical
+    rules:
+      - alert: HighEventLoopLag
+        expr: vertex_eventloop_lag_ms > 100
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node.js event loop lag is high"
+          description: "Event loop lag is {{ $value }}ms (threshold: 100ms)"
+
+      - alert: CriticalEventLoopLag
+        expr: vertex_eventloop_lag_ms > 500
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node.js event loop lag is critical"
+          description: "Event loop lag is {{ $value }}ms — trading execution may be delayed"
+
+      - alert: BrokerApiLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, provider, operation) (rate(vertex_broker_api_latency_ms_bucket[5m]))) > 500
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Broker API p95 latency exceeds 500ms"
+          description: "{{ $labels.provider }} {{ $labels.operation }} p95 latency: {{ $value }}ms"
+
+      - alert: BrokerApiLatencyCritical
+        expr: histogram_quantile(0.95, sum by (le, provider, operation) (rate(vertex_broker_api_latency_ms_bucket[5m]))) > 2000
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Broker API p95 latency exceeds 2s"
+          description: "{{ $labels.provider }} {{ $labels.operation }} p95 latency: {{ $value }}ms"
+
+      - alert: NoWebSocketConnections
+        expr: sum(vertex_ws_connections_active) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active WebSocket/streaming connections"
+          description: "All broker data feeds are disconnected"
+
+      - alert: HighCopyOrderLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(vertex_copy_order_latency_ms_bucket[5m]))) > 1000
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Copy order execution p95 latency exceeds 1s"
+          description: "p95 latency: {{ $value }}ms"
+
+      - alert: DatabaseLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(vertex_db_query_latency_ms_bucket[5m]))) > 200
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database query p95 latency exceeds 200ms"
+          description: "p95 latency: {{ $value }}ms"
+
+      - alert: HighMemoryUsage
+        expr: vertex_process_resident_memory_bytes > 512 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node.js process using >512MB RAM"
+          description: "RSS: {{ $value | humanize1024 }}B"
+
+      - alert: RiskInterventionTriggered
+        expr: increase(vertex_risk_interventions_total[5m]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "Risk intervention triggered"
+          description: "Type: {{ $labels.type }}, Status: {{ $labels.status }}"
+
+      - alert: AnalyticsServiceDown
+        expr: up{job="analytics"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analytics Python service is unreachable"
+          description: "Prometheus cannot scrape analytics /metrics endpoint"
+
+  - name: vertex_analytics_python
+    rules:
+      - alert: AnalyticsHighMemory
+        expr: process_resident_memory_bytes{job="analytics"} > 256 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analytics Python service using >256MB RAM"
+          description: "RSS: {{ $value | humanize1024 }}B"
+
+      - alert: AnalyticsSlowQueries
+        expr: histogram_quantile(0.95, sum by (le, handler) (rate(http_request_duration_seconds_bucket{job="analytics"}[5m]))) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analytics endpoint p95 response time exceeds 10s"
+          description: "Endpoint: {{ $labels.handler }}, p95: {{ $value }}s"

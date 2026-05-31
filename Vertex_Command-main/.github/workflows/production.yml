@@ -1,0 +1,200 @@
+name: Production Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  DEPLOY_HOST: ${{ secrets.VPS_HOST }}
+  DEPLOY_USER: ${{ secrets.VPS_USER || 'vertex' }}
+  DEPLOY_PORT: ${{ secrets.VPS_SSH_PORT || '2222' }}
+  DEPLOY_DIR: /opt/vertex-command
+
+jobs:
+  lint-and-audit:
+    name: Static Analysis & Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit --pretty
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
+
+      - name: Check for secrets in code
+        run: |
+          if grep -rn "sk_live_\|sk_test_\|AKIA[A-Z0-9]\{16\}\|-----BEGIN.*PRIVATE KEY-----" \
+            --include="*.ts" --include="*.tsx" --include="*.js" --include="*.json" \
+            --exclude-dir=node_modules --exclude-dir=.git .; then
+            echo "::error::Potential secrets detected in source code"
+            exit 1
+          fi
+
+  docker-build-test:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    needs: lint-and-audit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build vertex-app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: vertex-app:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build analytics image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./analytics
+          file: ./analytics/Dockerfile
+          push: false
+          tags: vertex-analytics:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: docker-build-test
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://${{ secrets.VERTEX_DOMAIN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "${{ secrets.VPS_HOST_FINGERPRINT }}" ]; then
+            echo "${{ secrets.VPS_HOST_FINGERPRINT }}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p ${{ env.DEPLOY_PORT }} -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+            echo "::warning::Using ssh-keyscan for host key. Set VPS_HOST_FINGERPRINT secret for pinned verification."
+          fi
+
+          cat >> ~/.ssh/config << EOF
+          Host vertex-vps
+            HostName ${{ env.DEPLOY_HOST }}
+            User ${{ env.DEPLOY_USER }}
+            Port ${{ env.DEPLOY_PORT }}
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking yes
+            ServerAliveInterval 60
+            ServerAliveCountMax 3
+          EOF
+
+      - name: Sync codebase to VPS
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.env' \
+            --exclude='dist' \
+            --exclude='.local' \
+            --exclude='artifacts' \
+            -e "ssh -p ${{ env.DEPLOY_PORT }} -i ~/.ssh/deploy_key" \
+            ./ ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}:${{ env.DEPLOY_DIR }}/
+
+      - name: Write production secrets (atomic)
+        run: |
+          ssh vertex-vps << 'ENVSEOF'
+            ENV_TMP="${{ env.DEPLOY_DIR }}/.env.tmp"
+            ENV_FINAL="${{ env.DEPLOY_DIR }}/.env"
+            cat > "$ENV_TMP" << 'DOTENV'
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB || 'vertex_command' }}
+          SESSION_SECRET=${{ secrets.SESSION_SECRET }}
+          VERTEX_DOMAIN=${{ secrets.VERTEX_DOMAIN }}
+          CERTBOT_EMAIL=${{ secrets.CERTBOT_EMAIL }}
+          TOPSTEPX_API_KEY=${{ secrets.TOPSTEPX_API_KEY }}
+          TOPSTEPX_USERNAME=${{ secrets.TOPSTEPX_USERNAME }}
+          TOPSTEPX_PASSWORD=${{ secrets.TOPSTEPX_PASSWORD }}
+          TRADOVATE_CID=${{ secrets.TRADOVATE_CID }}
+          TRADOVATE_SECRET=${{ secrets.TRADOVATE_SECRET }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          CREDENTIALS_ENCRYPTION_KEY=${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}
+          DOTENV
+            chmod 600 "$ENV_TMP"
+            mv "$ENV_TMP" "$ENV_FINAL"
+          ENVSEOF
+
+      - name: Deploy containers
+        run: |
+          ssh vertex-vps << 'DEPLOYSEOF'
+            cd ${{ env.DEPLOY_DIR }}
+            chmod +x infra/vps/deploy.sh
+            ./infra/vps/deploy.sh
+          DEPLOYSEOF
+
+      - name: Health check
+        run: |
+          echo "Waiting 15s for services to stabilize..."
+          sleep 15
+
+          ssh vertex-vps << 'HEALTHEOF'
+            cd ${{ env.DEPLOY_DIR }}
+            FAILED=0
+            for SVC in postgres vertex-app analytics prometheus grafana ingress; do
+              STATUS=$(docker compose ps --format "{{.Status}}" "$SVC" 2>/dev/null | head -1)
+              if echo "$STATUS" | grep -qi "up"; then
+                echo "✓ $SVC: $STATUS"
+              else
+                echo "✗ $SVC: $STATUS"
+                FAILED=1
+              fi
+            done
+            if [ "$FAILED" = "1" ]; then
+              echo "::error::One or more services are not healthy"
+              docker compose logs --tail=20
+              exit 1
+            fi
+          HEALTHEOF
+
+          DOMAIN="${{ secrets.VERTEX_DOMAIN }}"
+          if [ -n "$DOMAIN" ]; then
+            STATUS=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "https://$DOMAIN/api/v1/auth/me" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ]; then
+              echo "✓ External health check passed (HTTP $STATUS)"
+            else
+              echo "::error::External health check failed (HTTP $STATUS)"
+              exit 1
+            fi
+          fi
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

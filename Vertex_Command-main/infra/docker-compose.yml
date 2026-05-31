@@ -1,0 +1,206 @@
+version: "3.9"
+
+services:
+  go-routing-engine:
+    build:
+      context: ./backend-go
+      dockerfile: Dockerfile
+    container_name: vertex-go-engine
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - HEALTH_PORT=8081
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - REDIS_DB=0
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:?WEBHOOK_SECRET is required}
+      - BROKER_WS_URL=${BROKER_WS_URL:-}
+      - BROKER_API_KEY=${BROKER_API_KEY:-}
+      - BROKER_API_SECRET=${BROKER_API_SECRET:-}
+      - REDIS_PUBSUB_CHANNEL=vertex:trade_signals
+      - WS_HEARTBEAT_MS=2500
+      - WS_MAX_RECONNECT=20
+      - WS_ALLOWED_ORIGINS=${WS_ALLOWED_ORIGINS:-}
+      - FOLLOWER_WS_AUTH_TOKEN=${FOLLOWER_WS_AUTH_TOKEN:-}
+    expose:
+      - "8080"
+      - "8081"
+    networks:
+      - vertex-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+        reservations:
+          memory: 64M
+          cpus: "0.25"
+
+  nodejs-api:
+    build:
+      context: ../
+      dockerfile: infra/nodejs-api/Dockerfile
+    container_name: vertex-nodejs-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - TRADOVATE_CID=${TRADOVATE_CID:-}
+      - TRADOVATE_SEC=${TRADOVATE_SEC:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - CUSTOM_DOMAIN=${CUSTOM_DOMAIN:-}
+    expose:
+      - "5000"
+    networks:
+      - vertex-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+
+  frontend:
+    build:
+      context: ../
+      dockerfile: infra/frontend/Dockerfile
+    container_name: vertex-frontend
+    restart: unless-stopped
+    networks:
+      - vertex-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+        reservations:
+          memory: 32M
+          cpus: "0.1"
+
+  redis:
+    image: redis:7-alpine
+    container_name: vertex-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      --tcp-keepalive 60
+      --timeout 300
+    volumes:
+      - redis-data:/data
+    networks:
+      - vertex-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+  nginx-proxy:
+    image: nginx:1.25-alpine
+    container_name: vertex-nginx-proxy
+    restart: unless-stopped
+    environment:
+      - DOMAIN=${DOMAIN:-vertexcommand.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    networks:
+      - vertex-network
+    depends_on:
+      - go-routing-engine
+      - nodejs-api
+      - frontend
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+        reservations:
+          memory: 32M
+          cpus: "0.1"
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: vertex-certbot
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done;'"
+    networks:
+      - vertex-network
+
+volumes:
+  redis-data:
+    driver: local
+  certbot-conf:
+    driver: local
+  certbot-www:
+    driver: local
+
+networks:
+  vertex-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
