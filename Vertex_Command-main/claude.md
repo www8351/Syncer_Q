@@ -399,3 +399,23 @@ SIGNAL_WEBHOOK_SECRET
 - Trial countdown banner shown in sidebar for trialing users
 - Compact header and KPI cards on mobile
 - Dialog forms extracted into separate memoized components
+
+## Local Development
+- **DB**: dev PostgreSQL runs via `docker compose -f docker-compose.dev.yml up -d` → `postgres:15-alpine` on host port **5433** (container 5432), user/pass/db = `vertex`/`vertex`/`vertex_command`, healthcheck via `pg_isready`.
+- **Schema**: `npm run db:push` (drizzle-kit). First run only; existing DB already holds the full 26-table schema. `db:push` warns on data-loss drops — abort if the DB already has tables.
+- **Run**: `npm run dev` (`cross-env NODE_ENV=development tsx server/index.ts`). Express + Vite middleware serve API and SPA together on **port 5000**. Health at `GET /api/health`, `/health`, `/healthz`; metrics at `GET /metrics`.
+- **Required `.env` keys**: `DATABASE_URL` (`postgres://vertex:vertex@localhost:5433/vertex_command`), `CREDENTIALS_ENCRYPTION_KEY` (64 hex / 32 bytes), `SESSION_SECRET`, `SIGNAL_WEBHOOK_SECRET`.
+- **Credential decrypt note**: `server/encryption.ts` uses AES-256-GCM. A blob encrypted under a previous `CREDENTIALS_ENCRYPTION_KEY` fails with `Unsupported state or unable to authenticate data` (GCM auth-tag mismatch) and is **unrecoverable** — the auto-connect handler sets the connection to `error` + "reconnect" and the startup dedup merge (`server/linked-users.ts`) prunes duplicate connections.
+
+## Repository Docs
+- `README.md` — public-facing project README (overview, feature matrix, tech stack, architecture diagram, quick start, scripts, data model, security, deployment).
+- `PRESENTATION.md` — 12-slide project presentation deck (Marp/reveal/preview-ready).
+- `claude.md` — this file: deep architecture + AI context reference (renamed from `replit.md`).
+- `vertex-command-spec.md` — original product spec.
+
+## Repository Security Posture
+- Git history audited (all commits, all blobs): **no secrets ever committed** — `.env`, `.stripe-keys.json`, broker keys, encryption/session secrets, webhook URLs are absent from history. No `git filter-repo` purge needed.
+- `.env`, `.stripe-keys.json`, logs, `node_modules`, `dist`, `__pycache__`, `.venv`, `backups/`, `*.sql.gz` are git-ignored.
+- The git root is the **outer wrapper dir**; the project lives in the `Vertex_Command-main/` subdir. The detailed `.gitignore` (5.4 KB) is in the subdir; the **root** `.gitignore` carries a full-tree `**/` secret backstop so coverage holds regardless of subdir.
+- `.replit` secrets were removed (set via Replit Secrets). `.env.example` holds placeholders only.
+- Pre-push GitHub checklist: private repo, Secret Scanning + Push Protection, Dependabot, branch protection on `main` (PR review, required status checks `lint-and-audit`/`docker-build-test`, signed commits, linear history, no force-push).
