@@ -35,3 +35,19 @@ Followed systematic-debugging. The crash (`relation "unique_session_key" already
 **Fixes:** `drizzle.config.ts` `tablesFilter: ["!migrations"]` (push stops dropping the tracking table) + new `scripts/migrate-ratelimit.cjs` that applies the store migrations once, serially, before the app — wired into `entrypoint.sh` and npm `predev`/`prestart`. Used a `pg.Client` (not `{databaseUrl}`, which postgres-migrations v5 rejected — first attempt failed with "Database config problem", corrected to mirror the library).
 
 **Verified end-to-end:** fresh deploy healthy; **two consecutive restarts → `restarts=0`, healthy, 0 crash lines** (was 0→9 crash-loop); `public.migrations` survives push (8 rows); 49 app tables still managed; all 5 services healthy.
+
+## 2026-06-14 — Fix CI for PR #1 (green checks, no production deploy)
+
+Goal: make PR #1 show green checks WITHOUT enabling a prod deploy (VPS not provisioned). CI/workflow config only.
+
+- **Root cause (bigger than expected):** the only workflow lived at `Vertex_Command-main/.github/workflows/production.yml` — a **nested subdir**. GitHub Actions only discovers workflows in `.github/workflows/` at the **repo root**, so the workflow never ran at all (the missing `pull_request` trigger was secondary). Confirmed: repo root had no `.github/`; tracked paths were `Vertex_Command-main/.github/...` and `Vertex_Command-main/package.json`.
+- **Changed:**
+  - **Moved** workflow to repo root `.github/workflows/production.yml`; `git rm` the nested copy.
+  - **Nested-dir resolution:** `defaults.run.working-directory: Vertex_Command-main` (npm ci / tsc / audit / secret-scan); `setup-node` `cache-dependency-path: Vertex_Command-main/package-lock.json`; docker `context: Vertex_Command-main` (+ `analytics`) with matching `file:`.
+  - **PR trigger:** added `pull_request:[main]` (kept `push:[main]` + `workflow_dispatch`); per-ref `concurrency` so PRs don't serialize.
+  - **Deploy gated:** `if: github.event_name == 'workflow_dispatch' && vars.DEPLOY_ENABLED == 'true'` + job-level `concurrency: production-deploy`. A merge to main (event `push`) can never match → no auto-deploy. Re-enable steps documented in-file + DECISIONS.md.
+  - **tsc non-blocking:** `continue-on-error: true` (user-approved) — 133 pre-existing type errors (29 files); app builds via esbuild+vite regardless. Tracked as tech debt with a TODO to revert.
+- **Pre-push verification:** `.stripe-keys.json` is untracked → absent from CI checkout → secret-scan won't false-positive; `git grep` of tracked source = 0 secret-pattern matches. `npm run build` locally → exit 0, `dist/index.cjs` (2.0 MB) + `dist/public` produced (de-risks `docker-build-test`, which does not type-check). New workflow YAML parses; triggers/working-dir/deploy-gate/docker-contexts asserted via PyYAML.
+- **Tried/failed:** `actionlint` not installed (validated YAML structurally with PyYAML instead). First combined shell cmd short-circuited the `git rm` (a `&&` after a non-zero `python -c`); re-ran the removal separately.
+- **Constraint honored:** no app logic / no infra changes — only the workflow + lifecycle docs.
+- **Next:** push branch, watch the run, capture `gh pr checks 1`; STOP before merge (await user approval). PR stays draft.
