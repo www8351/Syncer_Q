@@ -43,7 +43,8 @@ sleep 5
 RETRIES=0
 MAX_RETRIES=12
 while [ $RETRIES -lt $MAX_RETRIES ]; do
-  HTTP_CODE=$(docker compose exec -T vertex-app wget -qS -O /dev/null http://localhost:5000/api/v1/auth/me 2>&1 | grep -oP 'HTTP/\S+ \K\d+' | head -1 || echo "000")
+  # 127.0.0.1 (not localhost): musl/Alpine resolves localhost->::1 first, but the app listens IPv4-only.
+  HTTP_CODE=$(docker compose exec -T vertex-app wget -qS -O /dev/null http://127.0.0.1:5000/api/v1/auth/me 2>&1 | grep -oP 'HTTP/\S+ \K\d+' | head -1 || echo "000")
   if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "302" ]; then
     log "Vertex-app healthy (HTTP $HTTP_CODE)"
     break

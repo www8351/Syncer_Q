@@ -1,436 +1,198 @@
-# Vertex Command — Production Migration Checklist
+# Vertex Command — Production Deployment Checklist (Path A)
 
-Step-by-step guide for migrating from Replit to a dedicated colocated server.
+Step-by-step guide for deploying the **ROOT monolith stack** to a dedicated server / VPS.
+
+> **Path A is the production target.** This checklist deploys the root `docker-compose.yml`
+> (`postgres → vertex-app + analytics → prometheus + grafana → ingress → certbot`), the stack
+> the application code is actually wired to.
+>
+> The microservices stack in `infra/docker-compose.microservices.yml` (Go engine + Redis) is
+> **future scaffolding — not wired to the app and not deployed here.** See `infra/README.md`.
+>
+> **Repo layout:** the git root is a thin wrapper; the application and `docker-compose.yml` live in
+> the `Vertex_Command-main/` subdirectory. All `docker compose` commands below run from there
+> (referred to as the *project root*).
 
 ---
 
 ## Phase 1: Server Provisioning
 
 ### 1.1 Server Requirements
-- [ ] Ubuntu 22.04 LTS (or newer) dedicated server / VPS
+- [ ] Ubuntu 22.04 LTS / Debian 12 (or newer) dedicated server / VPS
 - [ ] Minimum specs: 4 vCPU, 8 GB RAM, 80 GB SSD
 - [ ] Static public IPv4 address
 - [ ] SSH access with key-based authentication
-- [ ] Firewall configured (ports 22, 80, 443 open)
+- [ ] Firewall will allow only SSH + 80 + 443
 
-### 1.2 Initial Server Setup
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Set timezone
-sudo timedatectl set-timezone UTC
-
-# Create deploy user
-sudo adduser deploy
-sudo usermod -aG sudo deploy
-
-# Disable root SSH login
-sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
-sudo systemctl restart sshd
-
-# Configure UFW firewall
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
-```
+### 1.2 Harden the box
+- [ ] Run `infra/vps/provision.sh` as root on the fresh server. It creates the `vertex` deploy
+      user, hardens SSH (Ed25519 only, root login off, non-standard port), configures UFW
+      (deny-all + SSH/80/443), fail2ban, kernel sysctl hardening, and installs Docker Engine +
+      the Compose plugin.
 
 ---
 
-## Phase 2: Install Docker & Docker Compose
+## Phase 2: Docker Engine
 
-### 2.1 Install Docker Engine
+- [ ] `provision.sh` installs Docker + Compose. Verify:
 ```bash
-# Install dependencies
-sudo apt install -y ca-certificates curl gnupg lsb-release
-
-# Add Docker GPG key
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Add Docker repository
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Add deploy user to docker group
-sudo usermod -aG docker deploy
-newgrp docker
-
-# Verify installation
 docker --version
 docker compose version
 ```
-
-### 2.2 Configure Docker Logging
-```bash
-sudo tee /etc/docker/daemon.json <<EOF
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-EOF
-sudo systemctl restart docker
-```
+- [ ] Confirm the `vertex` user can run Docker (`docker ps` without sudo).
 
 ---
 
-## Phase 3: DNS Setup
+## Phase 3: DNS
 
-### 3.1 Configure DNS A Records
-Replace `yourdomain.com` with the value you set in the `DOMAIN` env variable.
-- [ ] `yourdomain.com` → Server IP
-- [ ] `www.yourdomain.com` → Server IP
-- [ ] `api.yourdomain.com` → Server IP
-
-### 3.2 Verify DNS Propagation
+- [ ] Point an A record for your apex domain (and `www`) at the server's public IP.
 ```bash
-# Check DNS resolution (run from any machine, replace with your domain)
 dig +short yourdomain.com
-dig +short api.yourdomain.com
-dig +short www.yourdomain.com
-
-# All should return the server's public IP
+dig +short www.yourdomain.com   # both should return the server IP
 ```
-
-> **Note:** DNS propagation can take up to 48 hours. Wait until all records resolve correctly before proceeding.
+> DNS propagation can take up to 48 h. Wait for resolution before requesting TLS certs (Phase 6).
 
 ---
 
-## Phase 4: Deploy Application
+## Phase 4: Configure the Application
 
-### 4.1 Clone Repository
+### 4.1 Clone
 ```bash
-# As deploy user
-cd /home/deploy
+# As the deploy user
+cd /home/vertex
 git clone <repository-url> vertex-command
-cd vertex-command
+cd vertex-command/Vertex_Command-main      # <-- project root (where docker-compose.yml lives)
 ```
 
-### 4.2 Configure Environment Variables
+### 4.2 Environment (`.env`)
 ```bash
-cd infra
-
-# Copy the template
-cp .env.template .env
-
-# Edit and fill in all required values
+cp .env.example .env
 nano .env
 ```
+**Required** (stack/app will not start without these):
+- [ ] `POSTGRES_PASSWORD` — strong password for the containerized Postgres
+- [ ] `SESSION_SECRET` — `openssl rand -hex 32`
+- [ ] `CREDENTIALS_ENCRYPTION_KEY` — `openssl rand -hex 32` (must be exactly 64 hex / 32 bytes; the app aborts on boot otherwise)
 
-**Required variables to configure:**
-- [ ] `DOMAIN` — Your domain (e.g., `vertexcommand.com`). Used by Nginx template for subdomain routing
-- [ ] `DATABASE_URL` — PostgreSQL connection string
-- [ ] `SESSION_SECRET` — Generate: `openssl rand -hex 32`
-- [ ] `CREDENTIALS_ENCRYPTION_KEY` — Generate: `openssl rand -hex 32` (must be 64 hex / 32 bytes)
-- [ ] `REDIS_PASSWORD` — Generate: `openssl rand -hex 24`
-- [ ] `WEBHOOK_SECRET` — Generate: `openssl rand -hex 32`
-- [ ] `STRIPE_SECRET_KEY` — From Stripe Dashboard
-- [ ] `STRIPE_WEBHOOK_SECRET` — From Stripe Dashboard
-- [ ] `TRADOVATE_CID` — Tradovate Client ID
-- [ ] `TRADOVATE_SEC` — Tradovate Client Secret
-- [ ] `CUSTOM_DOMAIN` — Same as DOMAIN, used by the Node.js API
+**Required for production HTTPS:**
+- [ ] `VERTEX_DOMAIN` — your domain (used by Grafana + certbot)
+- [ ] `CERTBOT_EMAIL` — Let's Encrypt registration email
 
-### 4.3 Set Up External PostgreSQL
-If using an external PostgreSQL instance (recommended for production):
-```bash
-# Verify database connectivity
-psql $DATABASE_URL -c "SELECT 1"
+**Optional** (feature-gated; safe to leave blank): `SIGNAL_WEBHOOK_SECRET`, broker keys
+(`TOPSTEPX_*`, `TRADOVATE_*`), `STRIPE_*`, `OPENAI_API_KEY`, `GRAFANA_ADMIN_PASSWORD`.
+See `.env.example` for the full annotated list.
 
-# Run database migrations
-cd /home/deploy/vertex-command
-npm install
-npm run db:push
-```
-
-If running PostgreSQL locally, add it to docker-compose.yml or install separately.
+> **Database:** Postgres is **containerized** by the root compose (the `postgres` service, `pgdata`
+> volume). You do **not** provision an external DB and you do **not** run `npm run db:push` by hand —
+> `entrypoint.sh` runs `drizzle-kit push` automatically on every `vertex-app` boot.
 
 ---
 
-## Phase 5: SSL Certificate Generation
+## Phase 5: Build & Start
 
-### 5.1 Initial Certificate Setup (Before Starting Nginx with SSL)
+### 5.1 Build images
 ```bash
-cd /home/deploy/vertex-command/infra
-
-# First, temporarily comment out the SSL server blocks in nginx/conf.d/default.conf.template
-# (This template is auto-processed by Nginx via envsubst at container start)
-# Keep only the HTTP server block with the ACME challenge location
-
-# Start only nginx for ACME challenge
-docker compose up -d nginx-proxy
-
-# Generate certificates
-docker compose run --rm certbot certonly \
-  --webroot \
-  -w /var/www/certbot \
-  -d $DOMAIN \
-  -d www.$DOMAIN \
-  -d api.$DOMAIN \
-  --email admin@$DOMAIN \
-  --agree-tos \
-  --no-eff-email
-
-# Restore the full nginx config (uncomment SSL server blocks)
-# Restart nginx to apply SSL
-docker compose restart nginx-proxy
+docker compose build          # Node (vertex-app), Python (analytics), Nginx (ingress)
 ```
 
-### 5.2 Verify SSL
+### 5.2 Start the stack
 ```bash
-# Test SSL
-curl -I https://vertexcommand.com
-curl -I https://api.vertexcommand.com
+docker compose up -d
+```
+This brings up `postgres → vertex-app + analytics → prometheus + grafana → ingress`. The ingress
+self-signs a 30-day bootstrap TLS cert on first start, so HTTPS is available immediately on 443.
+
+> On boot, `entrypoint.sh` waits for Postgres, runs `drizzle-kit push` (creates/syncs the schema),
+> then starts the Node server. First boot takes ~40 s (migrations + seeding) before the app listens —
+> this is covered by the healthcheck `start_period`.
+
+### 5.3 Confirm health
+```bash
+docker compose ps     # postgres, vertex-app, analytics, prometheus, grafana → "healthy"; ingress "running"
 ```
 
 ---
 
-## Phase 6: Build & Start Services
+## Phase 6: Real TLS (Let's Encrypt)
 
-### 6.1 Build All Images
+Once DNS resolves to the server:
 ```bash
-cd /home/deploy/vertex-command/infra
-
-# Build all services
-docker compose build --no-cache
-
-# Verify images were created
-docker images | grep vertex
+docker compose --profile ssl up -d certbot
 ```
+The certbot service obtains/renews a real certificate into the shared `ssl_certs` volume (cert name
+`vertex`) via the webroot challenge and auto-renews every 12 h. The ingress picks it up on reload,
+replacing the self-signed bootstrap cert.
 
-### 6.2 Start Services (Ordered)
+Verify:
 ```bash
-# Start Redis first
-docker compose up -d redis
-sleep 5
-
-# Verify Redis is healthy
-docker compose exec redis redis-cli -a "$REDIS_PASSWORD" ping
-# Should output: PONG
-
-# Start Go routing engine
-docker compose up -d go-routing-engine
-sleep 3
-
-# Start Node.js API
-docker compose up -d nodejs-api
-sleep 10
-
-# Start frontend
-docker compose up -d frontend
-sleep 3
-
-# Start Nginx reverse proxy
-docker compose up -d nginx-proxy
-
-# Start certbot renewal service
-docker compose up -d certbot
-```
-
-### 6.3 Verify All Services
-```bash
-# Check all containers are running
-docker compose ps
-
-# Expected output: all services showing "Up" and "healthy"
+curl -I https://yourdomain.com/api/health      # 200, real cert
 ```
 
 ---
 
 ## Phase 7: Smoke Tests
 
-### 7.1 Health Check Endpoints
 ```bash
-# Go routing engine health
-curl -s http://localhost:8080/health | jq .
+# App health (DB-backed) — direct on the container
+docker compose exec vertex-app wget -qO- http://127.0.0.1:5000/api/health
+#   → {"status":"healthy"|"degraded","services":{"database":true, ...}}
 
-# Node.js API health
-curl -s http://localhost:5000/api/health | jq .
+# Prometheus metrics (served on the container; the ingress denies /metrics externally by design)
+docker compose exec vertex-app wget -qO- http://127.0.0.1:5000/metrics | head
 
-# Frontend via Nginx
-curl -I https://www.vertexcommand.com
+# Analytics health
+docker compose exec analytics python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8100/health').read())"
 
-# API via Nginx
-curl -s https://api.vertexcommand.com/health | jq .
+# Through the Nginx ingress (TLS)
+curl -k https://localhost/api/health          # 200, routed to vertex-app
+curl -k https://localhost/                     # 200, React SPA
 
-# Node.js API via Nginx
-curl -s https://www.vertexcommand.com/api/health | jq .
+# Observability
+#   Grafana:    https://yourdomain.com/grafana/   (admin / GRAFANA_ADMIN_PASSWORD)
+#   Prometheus: internal only (scrapes vertex-app + analytics)
 ```
 
-### 7.2 WebSocket Connectivity
-```bash
-# Test follower WebSocket connection (requires wscat: npm install -g wscat)
-# Include the auth token from FOLLOWER_WS_AUTH_TOKEN (or WEBHOOK_SECRET)
-wscat -c "wss://api.$DOMAIN/ws/follower?group_id=test&token=$FOLLOWER_WS_AUTH_TOKEN"
-# Should receive: {"type":"connected","session_id":"follower_1",...}
-```
-
-### 7.3 Webhook → Follower Fan-Out Test
-```bash
-# In terminal 1: Connect a follower WebSocket (authenticated)
-wscat -c "wss://api.$DOMAIN/ws/follower?group_id=test&token=$FOLLOWER_WS_AUTH_TOKEN"
-
-# In terminal 2: Send a webhook signal
-WEBHOOK_SECRET="your-webhook-secret"
-PAYLOAD='{"ticker":"ESH2025","action":"buy","contracts":1,"price":5100.50,"group_id":"test"}'
-SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
-
-curl -X POST https://api.$DOMAIN/webhook/tradingview \
-  -H "Content-Type: application/json" \
-  -H "X-Webhook-Signature: $SIGNATURE" \
-  -d "$PAYLOAD"
-
-# Terminal 1 should display the trade signal message received via Redis Pub/Sub
-```
-
-### 7.4 Webhook Test
-```bash
-# Send a test webhook (replace with actual secret)
-WEBHOOK_SECRET="your-webhook-secret"
-PAYLOAD='{"ticker":"ESH2025","action":"buy","contracts":1,"price":5100.50}'
-SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
-
-curl -X POST https://api.vertexcommand.com/webhook/tradingview \
-  -H "Content-Type: application/json" \
-  -H "X-Webhook-Signature: $SIGNATURE" \
-  -d "$PAYLOAD"
-```
-
-### 7.4 Redis Pub/Sub Verification
-```bash
-# Subscribe to the trade signals channel (in one terminal)
-docker compose exec redis redis-cli -a "$REDIS_PASSWORD" SUBSCRIBE vertex:trade_signals
-
-# Send a test webhook (in another terminal) and verify the signal appears
-```
+> **Local / non-80-443 hosts:** publish on alternate ports with
+> `HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d` and test against `https://localhost:8443`.
 
 ---
 
-## Phase 8: Post-Migration Verification
+## Phase 8: Post-Deploy
 
-### 8.1 Application Checks
-- [ ] Login page loads at `https://www.vertexcommand.com`
-- [ ] User registration works
-- [ ] User login works
-- [ ] Dashboard loads with account data
-- [ ] Copy trading groups display correctly
-- [ ] Stripe checkout flow works
-- [ ] WebSocket connections establish (check latency monitor)
+- [ ] Log in, confirm the dashboard loads and live data streams (SSE).
+- [ ] If using Stripe, update the webhook endpoint to `https://yourdomain.com/api/v1/webhook` (or the billing webhook path) and set `STRIPE_WEBHOOK_SECRET`.
+- [ ] Confirm daily `pg_dump` backups are scheduled (logged by `vertex-app` on boot).
+- [ ] Check Grafana dashboards are populating from Prometheus.
 
-### 8.2 Performance Checks
-```bash
-# Check container resource usage
-docker stats --no-stream
-
-# Check Redis latency
-docker compose exec redis redis-cli -a "$REDIS_PASSWORD" --latency
-
-# Check container logs for errors
-docker compose logs --tail=50 go-routing-engine
-docker compose logs --tail=50 nodejs-api
-docker compose logs --tail=50 nginx-proxy
-```
-
-### 8.3 Update Stripe Webhook URL
-- [ ] In Stripe Dashboard → Developers → Webhooks
-- [ ] Update webhook endpoint to: `https://api.vertexcommand.com/api/stripe/webhook`
-- [ ] Verify webhook events are received
-
-### 8.4 Update TradingView Alert URLs
-- [ ] Update any TradingView alerts to point to: `https://api.vertexcommand.com/webhook/tradingview`
+> **Restarts/redeploys are safe.** The Postgres rate-limit store (`@acpr/rate-limit-postgresql`)
+> tracks its migrations in `public.migrations`, which `drizzle-kit push` previously dropped on every
+> boot (it is not a Drizzle-managed table), desyncing it from the persistent `rate_limit.*` objects
+> and crash-looping `vertex-app` on restart. Fixed by: `drizzle.config.ts` `tablesFilter: ["!migrations"]`
+> (push leaves the tracking table alone) + `scripts/migrate-ratelimit.cjs` (applies the store
+> migrations once, serially, before the app's stores construct). No manual steps required.
 
 ---
 
-## Phase 9: Rollback Procedure
+## Phase 9: Rollback
 
-If something goes wrong, follow these steps to revert:
-
-### 9.1 Quick Rollback to Replit
 ```bash
-# 1. Stop all Docker services
-cd /home/deploy/vertex-command/infra
+# Stop the stack (keep data)
 docker compose down
 
-# 2. Revert DNS records to point back to Replit
-#    - Update A records to Replit's IP
-#    - Or revert CNAME to Replit deployment URL
+# Stop and wipe ALL data (Postgres, Prometheus, Grafana volumes)
+docker compose down -v
 
-# 3. Re-enable Replit deployment
-#    - Push to main branch or redeploy via Replit dashboard
-
-# 4. Verify Replit app is serving traffic
-curl -I https://your-replit-domain.replit.app
-
-# 5. Update Stripe webhook URL back to Replit
-# 6. Update TradingView alert URLs back to Replit
-```
-
-### 9.2 Container-Level Rollback
-```bash
-# Roll back a single service to previous image
-docker compose up -d --no-deps --build <service-name>
-
-# View previous image tags
-docker images --format "{{.Repository}}:{{.Tag}} {{.CreatedAt}}" | sort -k2
-```
-
-### 9.3 Data Recovery
-```bash
-# Redis data is persisted in the redis-data volume
-# PostgreSQL should have regular backups configured separately
-
-# Restore Redis from AOF
-docker compose exec redis redis-cli -a "$REDIS_PASSWORD" BGREWRITEAOF
+# Roll back to a previous image/commit
+git checkout <previous-tag> && docker compose up -d --build
 ```
 
 ---
 
-## Maintenance Commands
+## Maintenance
 
-### Viewing Logs
 ```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f go-routing-engine
-docker compose logs -f nodejs-api
-
-# Last 100 lines
-docker compose logs --tail=100 nginx-proxy
-```
-
-### Restarting Services
-```bash
-# Single service
-docker compose restart go-routing-engine
-
-# All services
-docker compose restart
-
-# Rebuild and restart
-docker compose up -d --build go-routing-engine
-```
-
-### Updating Application
-```bash
-cd /home/deploy/vertex-command
-git pull origin main
-cd infra
-docker compose build --no-cache
-docker compose up -d
-```
-
-### SSL Certificate Renewal
-Certbot container handles automatic renewal. Manual renewal:
-```bash
-docker compose run --rm certbot renew
-docker compose restart nginx-proxy
+docker compose logs -f vertex-app          # tail app logs
+docker compose ps                          # service health
+docker compose pull && docker compose up -d   # update base images (postgres/prometheus/grafana)
+docker compose --profile ssl up -d certbot     # force a cert renewal check
 ```

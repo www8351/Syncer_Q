@@ -1,4 +1,7 @@
-version: "3.9"
+# Vertex Command — MICROSERVICES stack (FUTURE / EXPERIMENTAL — not wired to the app).
+# Production uses the ROOT ../docker-compose.yml (Path A). See infra/README.md.
+# Renamed from docker-compose.yml so a bare `docker compose up` cannot launch it by accident.
+# To run intentionally:  docker compose -f docker-compose.microservices.yml up
 
 services:
   go-routing-engine:

@@ -206,17 +206,40 @@ Plan features are enforced server-side via `requirePlanFeature()` (fail-closed);
 
 ## 🚢 Deployment
 
-Production ships as a **7-service Docker Compose** stack (Postgres → app + analytics → Prometheus + Grafana → Nginx ingress → Certbot), fronted by an Nginx WAF with TLS 1.2/1.3, HSTS, rate-limit zones, and SSE passthrough.
+> **Production target: the ROOT monolith stack (Path A)** — the `docker-compose.yml` at the project root. The `infra/` directory is **future microservices scaffolding — not wired to the app, not for production** (see [`infra/README.md`](infra/README.md)).
 
-CI/CD via **GitHub Actions**: type-check + dependency/secret audit → Docker buildx validation → SSH deploy to a hardened VPS with rolling restart, health-gated **automatic rollback**, and image pruning. See `infra/MIGRATION_CHECKLIST.md`.
+Production ships as a **7-service Docker Compose** stack: `postgres → vertex-app + analytics → prometheus + grafana → ingress (Nginx) → certbot (ssl profile)`, fronted by an Nginx WAF with TLS 1.2/1.3, HSTS, rate-limit zones, and SSE passthrough. Only the ingress publishes host ports 80/443; everything else stays on the internal network.
 
+### 1 · Configure `.env`
 ```bash
-# Full stack
-docker compose up -d
-
-# With SSL (Let's Encrypt)
-docker compose --profile ssl up -d
+cp .env.example .env
+# Fill the REQUIRED keys. Generate the secrets with:
+openssl rand -hex 32     # SESSION_SECRET, and CREDENTIALS_ENCRYPTION_KEY (must be 64 hex)
 ```
+Mandatory: `POSTGRES_PASSWORD`, `SESSION_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`. `.env` is required in practice — `CREDENTIALS_ENCRYPTION_KEY` and `SIGNAL_WEBHOOK_SECRET` reach the app **only** through it. See `.env.example` for the full REQUIRED/OPTIONAL list.
+
+### 2 · Build
+```bash
+docker compose build      # builds Node (app), Python (analytics), Nginx (ingress) images
+```
+
+### 3 · Start
+```bash
+docker compose up -d                          # full stack (publishes host 80/443)
+docker compose --profile ssl up -d certbot    # real Let's Encrypt TLS (after DNS points at the host)
+```
+The ingress self-signs a 30-day bootstrap cert on first start, so HTTPS works immediately; the `certbot` profile replaces it with a real certificate. Schema migrations run automatically on boot via `entrypoint.sh` (`drizzle-kit push`).
+
+> **Dev box where 80/443 are taken?** Override the published ports — `HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d`.
+
+### 4 · Verify
+```bash
+docker compose ps                                                            # all → healthy
+docker compose exec vertex-app wget -qO- http://127.0.0.1:5000/api/health    # {"services":{"database":true}}
+curl -k https://localhost/api/health                                         # 200 through the Nginx ingress
+```
+
+CI/CD via **GitHub Actions**: type-check + dependency/secret audit → Docker buildx validation → SSH deploy to a hardened VPS with rolling restart, health-gated **automatic rollback**, and image pruning. Full server walkthrough: [`infra/MIGRATION_CHECKLIST.md`](infra/MIGRATION_CHECKLIST.md).
 
 ---
 
