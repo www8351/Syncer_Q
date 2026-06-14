@@ -30,5 +30,12 @@ npx drizzle-kit push --force 2>&1 || {
   echo "[entrypoint] WARNING: Migration push encountered issues, continuing..."
 }
 
+# Apply the rate-limit store migrations ONCE, before the app constructs its 6 stores
+# (whose constructors otherwise race on these migrations and crash). See scripts/migrate-ratelimit.cjs.
+echo "[entrypoint] Applying rate-limit store migrations..."
+node scripts/migrate-ratelimit.cjs || {
+  echo "[entrypoint] WARNING: rate-limit migration step failed, continuing..."
+}
+
 echo "[entrypoint] Starting Vertex Command..."
 exec node dist/index.cjs
