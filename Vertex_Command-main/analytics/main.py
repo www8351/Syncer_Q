@@ -45,8 +45,10 @@ Instrumentator(
     should_ignore_untemplated=True,
     should_respect_env_var=False,
     excluded_handlers=["/health", "/metrics"],
-    metric_namespace="analytics",
-    metric_subsystem="",
+    # metric_namespace/metric_subsystem were removed from the Instrumentator
+    # constructor in prometheus-fastapi-instrumentator v6.0 (kwargs raise TypeError
+    # on the pinned v7.0.2). Dropped here — the Grafana dashboard filters analytics
+    # metrics by Prometheus job label, not by an "analytics_" name prefix.
 ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
