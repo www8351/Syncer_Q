@@ -4,7 +4,7 @@ _Last updated: 2026-06-14_
 
 ## Where the project stands
 
-Containerization (Step 1) finalized on branch `claude/containerization-setup-review-o40yot`. The ROOT monolith stack (Path A) builds and runs end-to-end; ambiguity vs the `infra/` microservices stack removed; hardening + docs applied. CI now runs on PR #1 (workflow relocated to repo root, deploy gated OFF). Draft PR pending review.
+Containerization (Step 1) finalized on branch `claude/containerization-setup-review-o40yot`. The ROOT monolith stack (Path A) builds and runs end-to-end; ambiguity vs the `infra/` microservices stack removed; hardening + docs applied. CI runs at repo root with deploy gated OFF. **PR #1 merged to main (4561dac) on 2026-06-14**; main CI green; no production deploy fired.
 
 ## Done
 
@@ -22,11 +22,11 @@ Containerization (Step 1) finalized on branch `claude/containerization-setup-rev
 
 ## Open / In progress
 
-- PR #1 CI is green and stays draft. **Awaiting user approval to mark ready / merge — do NOT merge yet.** Deploy intentionally stays disabled until the VPS is provisioned.
+- **PR #1 merged to main.** Verified on the merge-to-main push run: `Static Analysis & Audit`=success, `Docker Build Validation`=success, `Deploy to VPS`=skipped → no production deploy. Deploy stays disabled until the VPS is provisioned.
 
 ## Next best action
 
-- User reviews the green CI + the deploy-gating change; on approval, mark PR ready and merge. To enable deploy later: provision VPS, set `vars.DEPLOY_ENABLED=true`, run via `workflow_dispatch` (see DECISIONS.md / workflow comments).
+- Provision the VPS, then enable deploy: add deploy secrets, set repo variable `vars.DEPLOY_ENABLED=true`, run via `workflow_dispatch` (see DECISIONS.md / workflow comments). Separately: chip away at the 133 `tsc` errors, then revert `continue-on-error` to restore the hard type gate.
 
 ## Blockers / Waiting
 
