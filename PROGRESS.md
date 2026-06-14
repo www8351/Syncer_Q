@@ -63,3 +63,9 @@ Once the workflow ran from the repo root for the first time, three pre-existing 
 - **Verification (fresh evidence):** `gh pr checks 1` → exit 0; `Static Analysis & Audit` = pass, `Docker Build Validation` = pass (both images), `Deploy to VPS` = skipping. Deploy job `conclusion=skipped` across all 3 runs — **never executed**. PR #1 remains `isDraft=true`. tsc step shows as a tolerated (non-blocking) annotation, as designed.
 - **Did NOT** merge, mark ready, or run the deploy. Stopped for user approval.
 - **Commits:** `bc86a52` (relocate + gate), `124902c` (startup-failure fix), `bf89b7c` (client/src/lib), `a398cb5` (attached_assets .gitkeep).
+
+## 2026-06-14 — PR #1 merged to main (deploy verified NOT fired)
+
+- **Action:** User approved merge. Marked PR ready, merged via merge commit `4561dac`.
+- **Safety verification (the whole point):** the merge produced a `push` to main → workflow ran (`27505627776`). Deploy job `if: workflow_dispatch && DEPLOY_ENABLED` evaluated false on a `push` event → **`Deploy to VPS`=skipped**. `Static Analysis & Audit`=success, `Docker Build Validation`=success. No rsync / no prod secrets / no containers — confirmed no production deploy on merge to main.
+- **State:** `main` now carries the root-level CI workflow with deploy gated OFF. VPS deploy remains disabled until provisioned + `DEPLOY_ENABLED=true`.
