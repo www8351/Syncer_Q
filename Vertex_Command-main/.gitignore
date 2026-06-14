@@ -88,8 +88,10 @@ develop-eggs/
 dist/
 downloads/
 eggs/
-lib/
-lib64/
+# Anchored to repo-root so these Python-venv dirs don't also ignore app source
+# like client/src/lib/ (which holds queryClient.ts + utils.ts).
+/lib/
+/lib64/
 parts/
 sdist/
 var/
