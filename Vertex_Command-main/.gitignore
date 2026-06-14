@@ -200,7 +200,12 @@ tmp/
 /.canvas/
 /_bmad-output/
 /artifacts/
-/attached_assets/
+# Ignore the CONTENTS (not the dir itself) so the .gitkeep negation below can re-include
+# the placeholder — git can't re-include a file whose parent dir is excluded.
+/attached_assets/*
+# Keep the dir present (empty) so the Dockerfile's COPY attached_assets succeeds on a
+# clean checkout, without committing the 47 MB of (unused) media itself.
+!/attached_assets/.gitkeep
 
 # Ambiguous root artifact (review before committing)
 /sedixQDsR
