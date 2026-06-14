@@ -277,13 +277,14 @@ Pre-import validation checklist per broker. Accounts failing validation are skip
 - Workflow runs with `NODE_OPTIONS='--max-old-space-size=256'`
 - Baseline heap: ~52 MB (down from ~160 MB), well under 120 MB target
 
-## Production Migration Infrastructure (`infra/`)
-- `infra/docker-compose.yml` - Orchestrates all services: Go routing engine, Node.js API, Redis, frontend (Nginx), reverse proxy (Nginx), Certbot
+## Future Microservices Scaffolding (`infra/`) — NOT production
+> Production target is the **ROOT `docker-compose.yml` (Path A)**. `infra/` is unwired future scaffolding (Go engine + Redis); the app does not connect to it. See `infra/README.md`.
+- `infra/docker-compose.microservices.yml` - **renamed** from `docker-compose.yml` so a bare `docker compose up` in `infra/` can't launch it by accident. Orchestrates the future microservices: Go routing engine, Node.js API, Redis, frontend (Nginx), reverse proxy (Nginx), Certbot
 - `infra/backend-go/` - Go-based low-latency routing engine with: TradingView webhook handler, WebSocket connection manager (persistent broker connections with auto-reconnect), Redis Pub/Sub subscriber for Master→Slave signal fan-out
 - `infra/frontend/Dockerfile` - Multi-stage build: Vite build → Nginx static serving
 - `infra/nodejs-api/Dockerfile` - Multi-stage build: npm build → Node.js production runtime
 - `infra/nginx/` - Reverse proxy config with SSL/TLS (Let's Encrypt), WebSocket keep-alive (`proxy_read_timeout 86400s`), subdomain routing (`api.` → Go backend, `www.` → frontend)
-- `infra/.env.template` - Environment variable template for production deployment
+- `infra/.env.template` - (not present) — the root Path-A stack uses `.env` generated from the root `.env.example`
 - `infra/MIGRATION_CHECKLIST.md` - Step-by-step migration guide (server provisioning, Docker setup, DNS, SSL, deployment, smoke tests, rollback)
 
 ### Docker / Production Containerization
