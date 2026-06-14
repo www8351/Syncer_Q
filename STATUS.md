@@ -13,15 +13,20 @@ Containerization (Step 1) finalized on branch `claude/containerization-setup-rev
 - **Consolidation:** `infra/docker-compose.yml` → `infra/docker-compose.microservices.yml` + new `infra/README.md` (future/not-prod). Removed obsolete `version:` key.
 - **Hardening:** `env_file` now optional (`required:false`); `.env.example` annotated REQUIRED/OPTIONAL; deploy.sh health gate fixed to `127.0.0.1`.
 - **Docs:** README deployment section (both copies), `MIGRATION_CHECKLIST.md` rewritten for Path A, `claude.md` infra section corrected.
-- **CI fixed for PR #1:** workflow moved from nested `Vertex_Command-main/.github/` to **repo root** `.github/workflows/` (GitHub only reads root workflows — nested one never ran). Added `pull_request:[main]` trigger; set `working-directory`/`cache-dependency-path`/docker `context` to the nested app dir; made `tsc` non-blocking (133 pre-existing type errors — tracked tech debt). `deploy` job gated behind `workflow_dispatch` + `vars.DEPLOY_ENABLED=='true'` so a merge to main does NOT deploy (VPS not ready).
+- **CI fixed for PR #1 — GREEN confirmed** (`gh pr checks 1` exit 0: Static Analysis & Audit `pass`, Docker Build Validation `pass`, Deploy to VPS `skipping`):
+  - Workflow moved from nested `Vertex_Command-main/.github/` to **repo root** `.github/workflows/` (GitHub only reads root workflows — the nested one never ran, the real reason PR #1 had no checks).
+  - Added `pull_request:[main]` trigger; set `working-directory`/`cache-dependency-path`/docker `context` to the nested app dir; per-ref concurrency.
+  - `tsc` made non-blocking (133 pre-existing type errors — tracked tech debt).
+  - `deploy` gated behind `workflow_dispatch` + `vars.DEPLOY_ENABLED=='true'` (+ job-level `production-deploy` concurrency, `production` environment). A merge to main does NOT deploy. Verified: deploy `skipped` in every run, never executed.
+  - Three latent blockers fixed en route (all surfaced only once the workflow actually ran): `environment.url` `secrets`→`vars` (startup_failure); `client/src/lib/` un-ignored + 2 source files committed (Vite build); `attached_assets/.gitkeep` placeholder so the Dockerfile COPY works without a 47 MB commit.
 
 ## Open / In progress
 
-- Confirm PR #1 checks are GREEN (`lint-and-audit` + `docker-build-test`), then draft PR review + merge (awaiting user approval — do NOT merge yet).
+- PR #1 CI is green and stays draft. **Awaiting user approval to mark ready / merge — do NOT merge yet.** Deploy intentionally stays disabled until the VPS is provisioned.
 
 ## Next best action
 
-- User reviews CI result + the deploy-gating change; on approval, mark PR ready and merge.
+- User reviews the green CI + the deploy-gating change; on approval, mark PR ready and merge. To enable deploy later: provision VPS, set `vars.DEPLOY_ENABLED=true`, run via `workflow_dispatch` (see DECISIONS.md / workflow comments).
 
 ## Blockers / Waiting
 

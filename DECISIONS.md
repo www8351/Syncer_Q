@@ -85,3 +85,24 @@ Decision log. Why things were chosen, what was rejected, whether final.
 - **Why:** `npx tsc --noEmit` reports **133 pre-existing type errors across 29 files** (top codes: 60×TS2345 arg-type, 29×TS2802 Map/Set iteration w/o `target`≥es2015, 10×TS2339 missing-prop; files incl. `server/routes.ts`, `server/storage.ts`, `server/trading-routes.ts`, `server/webhookHandlers.ts`, several `client/src/pages/*`). These are unrelated to this PR and the app still builds/runs because `npm run build` uses esbuild+vite, which transpile without type-checking (verified locally: `dist/index.cjs` 2.0 MB + `dist/public` produced, exit 0). Fixing 133 errors is app-logic work, out of scope for a CI-plumbing PR. Mirrors the existing non-blocking `npm audit` step.
 - **Rejected:** Fix all 133 now (app logic, out of scope, some are real bugs e.g. `getRithmicWSClient` undefined in `trading-routes.ts`); hybrid tsconfig `target` bump (still leaves ~100 non-blocking); keep tsc hard-blocking (PR can never go green).
 - **Status:** Provisional — revert `continue-on-error` once the 133 errors are resolved (follow-up). Tracked here so it isn't buried.
+
+## 2026-06-14 — Fix latent `environment.url` startup failure (secrets → vars)
+
+- **Decision:** `deploy.environment.url` changed from `https://${{ secrets.VERTEX_DOMAIN }}` to `https://${{ vars.VERTEX_DOMAIN }}`.
+- **Why:** `secrets` is not an allowed context in `environment.url`; it caused a whole-workflow **startup_failure** (0s, no jobs) the first time the workflow actually ran from the repo root. Caught by `actionlint`. Latent bug — never seen before because the nested workflow never ran. Confirmed by GitHub: "This run likely failed because of a workflow file issue."
+- **Status:** Final. Domains aren't sensitive → set repo variable `VERTEX_DOMAIN` to populate the deployments link.
+
+## 2026-06-14 — Track `client/src/lib/` (gitignore `lib/` over-match) — user-approved
+
+- **Decision:** Anchor the Python-packaging patterns `lib/`→`/lib/`, `lib64/`→`/lib64/` and commit the two previously-ignored source files `client/src/lib/queryClient.ts` + `utils.ts`.
+- **Why:** The unanchored `lib/` rule (a venv pattern) matched **every** `lib/` dir, incl. the app's `client/src/lib/`. Those 2 files (react-query client + shadcn `cn()` helper, imported widely) were never committed, so a clean checkout couldn't resolve `./lib/queryClient` from `App.tsx` and the Vite build failed. Local builds worked only because the files exist on disk.
+- **Scope note:** Crosses the "config-only" task boundary (commits app source) — explicitly approved by the user. No secrets (scanned); no logic change.
+- **Rejected:** `git add -f` without fixing the rule (leaves the gitignore bug); leaving it (repo not buildable from a clean clone).
+- **Status:** Final.
+
+## 2026-06-14 — `attached_assets` via `.gitkeep` placeholder (no 47 MB commit) — user-approved
+
+- **Decision:** Keep `attached_assets` deliberately ignored, but track an empty `attached_assets/.gitkeep`: change `/attached_assets/`→`/attached_assets/*` + add `!/attached_assets/.gitkeep`.
+- **Why:** The Dockerfile runner stage runs `COPY --from=builder /app/attached_assets`, which fails on a clean checkout because the 47 MB of media is gitignored. The build doesn't need it (vite built fine without it) and no server code references it (only an unused `@assets` Vite alias) — so an empty dir satisfies the COPY. The `/attached_assets/` (dir) form blocks re-includes; `/*` (contents) form keeps the dir traversable so the negation works.
+- **Rejected:** Removing the Dockerfile COPY line (infra change the user excluded); committing all 47 MB (permanent git bloat, contradicts the deliberate ignore).
+- **Status:** Final. CI green confirmed after this fix.

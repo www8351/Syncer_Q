@@ -51,3 +51,15 @@ Goal: make PR #1 show green checks WITHOUT enabling a prod deploy (VPS not provi
 - **Tried/failed:** `actionlint` not installed (validated YAML structurally with PyYAML instead). First combined shell cmd short-circuited the `git rm` (a `&&` after a non-zero `python -c`); re-ran the removal separately.
 - **Constraint honored:** no app logic / no infra changes — only the workflow + lifecycle docs.
 - **Next:** push branch, watch the run, capture `gh pr checks 1`; STOP before merge (await user approval). PR stays draft.
+
+## 2026-06-14 — CI iteration to GREEN (3 latent blockers found by actually running the workflow)
+
+Once the workflow ran from the repo root for the first time, three pre-existing bugs surfaced in sequence (none were ever visible before because the nested workflow never executed). Fixed each, re-pushed, re-watched:
+
+1. **Startup failure (0s, no jobs):** `deploy.environment.url` used `${{ secrets.VERTEX_DOMAIN }}`; `secrets` isn't an allowed context there → whole-workflow compile failure. Installed `actionlint` (v1.7.7 win binary) which pinpointed it (`context "secrets" is not allowed here`). Fixed → `vars.VERTEX_DOMAIN`. Re-ran clean.
+2. **Docker build — `Could not resolve "./lib/queryClient"`:** `.gitignore` `lib/` (a Python-venv pattern) over-matched `client/src/lib/`, so `queryClient.ts` + `utils.ts` were never committed → absent from the CI checkout. Anchored the rule (`/lib/`, `/lib64/`) and committed the 2 files (user-approved scope cross). Build advanced.
+3. **Docker build — `/app/attached_assets: not found`:** runner stage `COPY attached_assets` failed because the 47 MB media dir is deliberately gitignored. Confirmed unused (vite built without it; no server refs). User-approved fix: `attached_assets/.gitkeep` placeholder (`/attached_assets/*` + `!.gitkeep`) — dir present, media uncommitted, Dockerfile untouched.
+
+- **Verification (fresh evidence):** `gh pr checks 1` → exit 0; `Static Analysis & Audit` = pass, `Docker Build Validation` = pass (both images), `Deploy to VPS` = skipping. Deploy job `conclusion=skipped` across all 3 runs — **never executed**. PR #1 remains `isDraft=true`. tsc step shows as a tolerated (non-blocking) annotation, as designed.
+- **Did NOT** merge, mark ready, or run the deploy. Stopped for user approval.
+- **Commits:** `bc86a52` (relocate + gate), `124902c` (startup-failure fix), `bf89b7c` (client/src/lib), `a398cb5` (attached_assets .gitkeep).
