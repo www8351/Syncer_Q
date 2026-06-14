@@ -132,7 +132,11 @@ jobs:
       cancel-in-progress: false
     environment:
       name: production
-      url: https://${{ secrets.VERTEX_DOMAIN }}
+      # NOTE: `secrets` is NOT an allowed context in `environment.url` (using it causes
+      # a workflow startup failure). A domain isn't sensitive — set a repo VARIABLE
+      # `VERTEX_DOMAIN` to populate this deployments link. While deploy is disabled an
+      # unset value just yields an unused `https://`, which is harmless.
+      url: https://${{ vars.VERTEX_DOMAIN }}
 
     steps:
       - uses: actions/checkout@v4
