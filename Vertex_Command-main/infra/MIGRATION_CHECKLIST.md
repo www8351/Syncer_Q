@@ -164,12 +164,12 @@ curl -k https://localhost/                     # 200, React SPA
 - [ ] Confirm daily `pg_dump` backups are scheduled (logged by `vertex-app` on boot).
 - [ ] Check Grafana dashboards are populating from Prometheus.
 
-> **Known issue — restarts over an existing DB:** `vertex-app` currently crash-loops on a *restart/redeploy*
-> against an already-initialized database, because the Postgres rate-limit store
-> (`@acpr/rate-limit-postgresql`, `server/index.ts`) re-runs its `init` migration and hits
-> `relation "unique_session_key" already exists`. **Fresh first deploys are unaffected.** Until the
-> app-side fix lands, a redeploy needs either a one-off cleanup of the rate-limit tables or the store's
-> init made idempotent. Track before relying on rolling restarts in production.
+> **Restarts/redeploys are safe.** The Postgres rate-limit store (`@acpr/rate-limit-postgresql`)
+> tracks its migrations in `public.migrations`, which `drizzle-kit push` previously dropped on every
+> boot (it is not a Drizzle-managed table), desyncing it from the persistent `rate_limit.*` objects
+> and crash-looping `vertex-app` on restart. Fixed by: `drizzle.config.ts` `tablesFilter: ["!migrations"]`
+> (push leaves the tracking table alone) + `scripts/migrate-ratelimit.cjs` (applies the store
+> migrations once, serially, before the app's stores construct). No manual steps required.
 
 ---
 

@@ -50,8 +50,10 @@ Decision log. Why things were chosen, what was rejected, whether final.
 - **Rejected:** Pin to 5.x/6.x (dependency conflict / kwarg still absent in 6.x).
 - **Status:** Final.
 
-## 2026-06-14 — Rate-limit restart crash left for app-side follow-up
+## 2026-06-14 — Rate-limit restart crash — FIXED (user-authorized app-level fix)
 
-- **Decision:** Do NOT fix the `@acpr/rate-limit-postgresql` re-init crash in this PR.
-- **Why:** Root cause is in application code (`server/index.ts:265` constructs multiple `PostgresStore`s, each re-running a non-idempotent `init`); the task constrains changes to containerization + docs. Fresh deploys work; only restart/redeploy over an existing DB is affected.
-- **Status:** Open — flagged in PR, STATUS.md, and MIGRATION_CHECKLIST Phase 8. Revisit with an app-side idempotency fix before relying on rolling restarts.
+- **Decision:** Fix the `@acpr/rate-limit-postgresql` re-init crash via `tablesFilter` + a one-shot pre-migration, not by editing `server/index.ts`.
+- **Investigation (systematic debugging):** Two compounding causes — (1) `drizzle-kit push --force` drops `public.migrations` every boot (it's not in the Drizzle schema; the rate-limit objects live in the separate `rate_limit` schema and persist), so tracking desyncs and `init` re-runs into `relation "unique_session_key" already exists`; (2) the 6 `PostgresStore` constructors call `applyMigrations()` un-awaited → concurrent races on first boot.
+- **Fix:** `drizzle.config.ts` → `tablesFilter: ["!migrations"]` (push leaves the tracking table alone); `scripts/migrate-ratelimit.cjs` applies the store migrations once, serially, before the app constructs its stores, wired into `entrypoint.sh` + npm `predev`/`prestart`.
+- **Rejected:** Editing `server/index.ts` to share/serialize stores (more invasive, reorders middleware); catching the error (symptom only — later migrations would be skipped).
+- **Status:** Final. Verified: two restarts → restarts=0, healthy, 0 crashes; tracking survives push; app tables intact.

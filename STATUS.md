@@ -28,4 +28,8 @@ Containerization (Step 1) finalized on branch `claude/containerization-setup-rev
 
 ## Needs review
 
-- **Known app-level bug (out of containerization scope):** `vertex-app` crash-loops on **restart/redeploy over an existing DB** — `@acpr/rate-limit-postgresql` (`server/index.ts:265`) re-runs its `init` migration → `relation "unique_session_key" already exists`. Fresh deploys unaffected. Needs an app-side fix (idempotent store init / single shared store). Flagged in the PR and `MIGRATION_CHECKLIST.md` Phase 8.
+- None outstanding.
+
+## Fixed after initial verification
+
+- **Rate-limit restart crash — RESOLVED.** Root cause was two compounding bugs: (1) `drizzle-kit push --force` dropped the `public.migrations` tracking table every boot (unmanaged by Drizzle; the `rate_limit.*` objects persist in their own schema), desyncing tracking from reality; (2) the 6 `PostgresStore` constructors fire un-awaited concurrent migrations. **Fixes:** `drizzle.config.ts` `tablesFilter: ["!migrations"]` (push no longer drops tracking) + `scripts/migrate-ratelimit.cjs` run once before the app (entrypoint + npm pre-scripts). Verified: two consecutive restarts → `restarts=0`, healthy, 0 crash lines; `public.migrations` survives push (8 rows); 49 app tables still managed.

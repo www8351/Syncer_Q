@@ -24,3 +24,14 @@ Branch: `claude/containerization-setup-review-o40yot`. Order 3→1→2→4.
 - **STEP 2 (harden):** root `env_file` → `path: .env, required: false` (documented `.env` still mandatory in practice); removed obsolete `version: "3.9"` from the microservices compose; annotated every `.env.example` var REQUIRED/OPTIONAL.
 - **STEP 4 (docs):** README Deployment section rewritten (build→configure→up→verify, port override, infra=not-prod) in both README copies; `infra/MIGRATION_CHECKLIST.md` rewritten for Path A (containerized Postgres, root stack, auto-migrations, certbot profile); `claude.md` infra section corrected.
 - **Did not modify** application/business logic. Two source touches were unavoidable blocking-build fixes: `analytics/main.py` (removed dead kwargs) and `package.json` (dep classification) — neither changes app behavior.
+
+## 2026-06-14 — Rate-limit restart crash FIXED (user-authorized)
+
+Followed systematic-debugging. The crash (`relation "unique_session_key" already exists` on restart) had **two** root causes, found by reading the library source + inspecting live DB state:
+
+- **drizzle-kit push drops the tracking table.** `@acpr/rate-limit-postgresql` tracks migrations in `public.migrations` and keeps its objects in a separate `rate_limit` schema. `entrypoint.sh` runs `drizzle-kit push --force` every boot, which **dropped `public.migrations`** (not a Drizzle table) while the `rate_limit.*` objects persisted → tracking desynced → `init` re-ran and collided. Proven by one-off test: `public.migrations` present (1 row) → `null` after `push --force`.
+- **Un-awaited concurrent store migrations.** `PostgresStore`'s constructor calls `applyMigrations()` fire-and-forget; `server/index.ts` builds 6 stores → 6 racing migrations on first boot.
+
+**Fixes:** `drizzle.config.ts` `tablesFilter: ["!migrations"]` (push stops dropping the tracking table) + new `scripts/migrate-ratelimit.cjs` that applies the store migrations once, serially, before the app — wired into `entrypoint.sh` and npm `predev`/`prestart`. Used a `pg.Client` (not `{databaseUrl}`, which postgres-migrations v5 rejected — first attempt failed with "Database config problem", corrected to mirror the library).
+
+**Verified end-to-end:** fresh deploy healthy; **two consecutive restarts → `restarts=0`, healthy, 0 crash lines** (was 0→9 crash-loop); `public.migrations` survives push (8 rows); 49 app tables still managed; all 5 services healthy.
