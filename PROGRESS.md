@@ -69,3 +69,8 @@ Once the workflow ran from the repo root for the first time, three pre-existing 
 - **Action:** User approved merge. Marked PR ready, merged via merge commit `4561dac`.
 - **Safety verification (the whole point):** the merge produced a `push` to main → workflow ran (`27505627776`). Deploy job `if: workflow_dispatch && DEPLOY_ENABLED` evaluated false on a `push` event → **`Deploy to VPS`=skipped**. `Static Analysis & Audit`=success, `Docker Build Validation`=success. No rsync / no prod secrets / no containers — confirmed no production deploy on merge to main.
 - **State:** `main` now carries the root-level CI workflow with deploy gated OFF. VPS deploy remains disabled until provisioned + `DEPLOY_ENABLED=true`.
+
+## 2026-06-15 — Cleanup: feature branch deleted
+
+- Deleted `claude/containerization-setup-review-o40yot` (remote + local; local `-d` confirmed it was merged). Merged commits preserved in `main` via merge commit `4561dac`.
+- CI/containerization work fully closed. No open work items; next action is VPS provisioning (then enable deploy) + paying down the 133 `tsc` errors.

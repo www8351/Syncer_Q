@@ -1,6 +1,6 @@
 # STATUS
 
-_Last updated: 2026-06-14_
+_Last updated: 2026-06-15_
 
 ## Where the project stands
 
@@ -22,7 +22,7 @@ Containerization (Step 1) finalized on branch `claude/containerization-setup-rev
 
 ## Open / In progress
 
-- **PR #1 merged to main.** Verified on the merge-to-main push run: `Static Analysis & Audit`=success, `Docker Build Validation`=success, `Deploy to VPS`=skipped → no production deploy. Deploy stays disabled until the VPS is provisioned.
+- **Nothing in progress.** PR #1 merged to main (verified: `Deploy to VPS`=skipped, no production deploy); feature branch `claude/containerization-setup-review-o40yot` deleted (local + remote). Deploy stays disabled until the VPS is provisioned.
 
 ## Next best action
 
