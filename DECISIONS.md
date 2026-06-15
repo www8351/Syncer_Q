@@ -115,3 +115,13 @@ Decision log. Why things were chosen, what was rejected, whether final.
 - **Out of scope (later steps):** Global Accelerator + locking 443 to it; engine app-wiring (Redis, `WEBHOOK_SECRET`, running the container); custom VPC (uses default VPC for now).
 - **Rejected:** Node monolith as the regional image (DB-coupled, heavier); local TF state; new EC2 keypair; per-region ECR replication.
 - **Status:** Code written + `terraform validate` passes (root + bootstrap), `fmt` clean. NOT applied (creates billable resources — user runs apply).
+
+## 2026-06-15 — Repo/disk cleanup (tiered, user-approved)
+
+- **Decision:** Remove accumulated junk in tiers. The git history is small (`.git` = 4.3 MB), so no history purge needed — only working-tree + local cleanup.
+  - **Tier A (local, not in git):** deleted logs, `dist/`, `.cache/ .agents/ .canvas/`, `artifacts/`, `.replit`, empty `_bmad-output/ backups/`, an editor swap file, and 3 STALE untracked duplicate lifecycle files inside the nested `Vertex_Command-main/` (canonical copies live at repo root).
+  - **Tier B (tracked → `git rm`):** `python_fixes/` (4 experimental Python files, no code refs), `PRESENTATION.md`, `vertex-command-spec.md`.
+  - **Tier C:** `git rm _bmad/` (BMAD skill config — recoverable from git; note: disables the `bmad-*` skills until reinstalled). `attached_assets/` pruned locally — deleted 113 junk files (old `Pasted-*.txt` prompts, screenshots, images, mp4), **kept the 6 `logo-vertex-*.png` + `.gitkeep`** (47 MB → 3.1 MB).
+- **Kept / not deleted (by user choice or safety):** `node_modules` (707 MB, recoverable via `npm ci` — user declined), `_bmad` ignored remnants (10 KB, user declined), and ALWAYS-KEEP secrets `.env` + `.stripe-keys.json`.
+- **Safety:** irreversible local deletions (attached_assets media, not in git) were done only after explicit per-bucket confirmation. No secret or essential build file (`script/build.ts`, `scripts/migrate-ratelimit.cjs`, app dirs) touched.
+- **Status:** Final. A done; B + C (attached_assets) done; node_modules / _bmad-remnant deferred by user.

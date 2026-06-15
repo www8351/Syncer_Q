@@ -24,6 +24,7 @@ Containerization (Step 1) finalized on branch `claude/containerization-setup-rev
 
 - PR #1 merged to main (verified: `Deploy to VPS`=skipped); its feature branch deleted.
 - **Step 2 — AWS infra (Terraform) written on branch `claude/aws-terraform-step2`.** `infra/terraform/` (ECR + 3 ARM64 EC2 in us-east-1/eu-central-1/ap-northeast-1, IAM ECR-readonly, hardened via provision.sh + ECR cred helper, S3/DynamoDB state). `infra/backend-go/Dockerfile` made ARM64-capable. **Validated** (`terraform validate` ok, `fmt` clean) but **NOT applied** (billable). Committed locally; not pushed.
+- **Repo/disk cleanup done (Tiers A+B+C).** Removed local junk + `git rm` of `python_fixes/`, `PRESENTATION.md`, `vertex-command-spec.md`, `_bmad/`; pruned `attached_assets` 47 MB → 3.1 MB (kept logos). Kept (user choice): `node_modules`, `_bmad` remnants. Secrets untouched. See DECISIONS/PROGRESS (2026-06-15).
 
 ## Next best action
 
