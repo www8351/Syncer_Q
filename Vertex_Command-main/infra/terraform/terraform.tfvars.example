@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+admin_cidr     = "203.0.113.10/32" # your public IP /32 (curl -s https://checkip.amazonaws.com)
+ssh_public_key = "ssh-ed25519 AAAAC3Nza... you@host"
+
+# Optional overrides:
+# instance_type     = "c7g.large"
+# app_ingress_ports = [443]
+# ssh_port          = 2222

@@ -106,3 +106,12 @@ Decision log. Why things were chosen, what was rejected, whether final.
 - **Why:** The Dockerfile runner stage runs `COPY --from=builder /app/attached_assets`, which fails on a clean checkout because the 47 MB of media is gitignored. The build doesn't need it (vite built fine without it) and no server code references it (only an unused `@assets` Vite alias) — so an empty dir satisfies the COPY. The `/attached_assets/` (dir) form blocks re-includes; `/*` (contents) form keeps the dir traversable so the negation works.
 - **Rejected:** Removing the Dockerfile COPY line (infra change the user excluded); committing all 47 MB (permanent git bloat, contradicts the deliberate ignore).
 - **Status:** Final. CI green confirmed after this fix.
+
+## 2026-06-15 — Step 2: AWS infra (ECR + 3-region Graviton) via Terraform
+
+- **Decision:** New `infra/terraform/` provisions the copy-trading **Go routing engine** infra: 1 ECR repo (`vertex-go-routing-engine`, us-east-1) + 3 ARM64 EC2 (`c7g.medium`, Ubuntu 24.04) in us-east-1 / eu-central-1 / ap-northeast-1, IAM instance profile (`AmazonEC2ContainerRegistryReadOnly`) for keyless pulls, per-region SG (SSH 2222←admin IP, 443←0.0.0.0/0 interim). cloud-init reuses `infra/vps/provision.sh` + installs `amazon-ecr-credential-helper`. State in S3+DynamoDB (separate `bootstrap/`).
+- **Why these choices (user-confirmed):** engine=Go (matches low-latency multi-region + future Global Accelerator); state=S3+DynamoDB; SSH=2222 (reuse provision.sh); SSH key=imported public key. Single ECR with cross-region pull (one registry is enough). AMI via Canonical SSM param (no hardcoded IDs). 3 provider aliases + one reusable `modules/region-host`. IMDSv2 enforced.
+- **Code change:** `infra/backend-go/Dockerfile` made ARM64-capable (`--platform=$BUILDPLATFORM`, `TARGETOS/TARGETARCH`, default arm64) — was hardcoded `GOARCH=amd64`. `build-push.sh` does buildx push to ECR.
+- **Out of scope (later steps):** Global Accelerator + locking 443 to it; engine app-wiring (Redis, `WEBHOOK_SECRET`, running the container); custom VPC (uses default VPC for now).
+- **Rejected:** Node monolith as the regional image (DB-coupled, heavier); local TF state; new EC2 keypair; per-region ECR replication.
+- **Status:** Code written + `terraform validate` passes (root + bootstrap), `fmt` clean. NOT applied (creates billable resources — user runs apply).

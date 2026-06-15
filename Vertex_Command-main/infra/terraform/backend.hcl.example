@@ -1,0 +1,7 @@
+# Copy to backend.hcl and fill in the bucket created by ./bootstrap.
+# Then:  terraform init -backend-config=backend.hcl
+bucket         = "REPLACE-vertex-tfstate-<unique-suffix>"
+key            = "step2-aws-infra/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "vertex-tf-locks"
+encrypt        = true
