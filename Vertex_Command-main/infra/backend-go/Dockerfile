@@ -1,4 +1,8 @@
-FROM golang:1.22-alpine AS builder
+# Multi-arch: build with `docker buildx build --platform linux/arm64 ...` for Graviton.
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 RUN apk add --no-cache git ca-certificates tzdata
 
@@ -9,7 +13,8 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# TARGETOS/TARGETARCH are set by buildx; default to linux/arm64 for plain `docker build`.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-arm64} go build \
     -ldflags="-w -s -X main.version=$(date +%Y%m%d%H%M%S)" \
     -o /go-routing-engine \
     ./cmd/server/

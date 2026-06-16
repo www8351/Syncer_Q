@@ -74,3 +74,23 @@ Once the workflow ran from the repo root for the first time, three pre-existing 
 
 - Deleted `claude/containerization-setup-review-o40yot` (remote + local; local `-d` confirmed it was merged). Merged commits preserved in `main` via merge commit `4561dac`.
 - CI/containerization work fully closed. No open work items; next action is VPS provisioning (then enable deploy) + paying down the 133 `tsc` errors.
+
+## 2026-06-15 — Step 2: AWS infra as Terraform (branch claude/aws-terraform-step2)
+
+- **Worked on:** Greenfield `infra/terraform/` for the Go routing engine across 3 regions.
+- **Created:** root config (`versions/providers/variables/main/ecr/iam/outputs.tf`), reusable `modules/region-host` (key pair + SG + EC2, Ubuntu 24.04 ARM64 via Canonical SSM), `templates/user_data.cloud-init.yaml.tftpl` (embeds provision.sh b64 + installs `amazon-ecr-credential-helper`), `bootstrap/` (S3+DynamoDB state), `backend.hcl.example`, `terraform.tfvars.example`, `.gitignore`, `README.md`. Added `infra/backend-go/build-push.sh`.
+- **Edited:** `infra/backend-go/Dockerfile` → ARM64-capable (`TARGETOS/TARGETARCH`, default arm64).
+- **Decisions (user-confirmed):** Go engine image; S3+DynamoDB state; SSH 2222; imported public key. SG: SSH←admin IP, 443←0.0.0.0/0 (interim until Global Accelerator). IMDSv2 enforced; single ECR + cross-region pull.
+- **Verified:** downloaded terraform 1.9.8; `terraform fmt -recursive -check` clean; `terraform init -backend=false` + `terraform validate` = "configuration is valid" for BOTH root and bootstrap. **Not applied** (billable AWS resources — user runs apply per README).
+- **Not done (later steps):** AWS Global Accelerator + 443 lockdown; engine app-wiring (Redis/secrets/run); custom VPC.
+
+## 2026-06-15 — Repo/disk cleanup (Tiers A + B + C)
+
+Inventory first: `.git` only 4.3 MB (repo NOT bloated); disk hogs were local/ignored (`node_modules` 707 MB, `attached_assets` 47 MB, `dist` 6.2 MB).
+
+- **Tier A (local rm, not in git):** logs (`dev-server.log`, `vite-dev.log`), `dist/`, `.cache/ .agents/ .canvas/`, `artifacts/`, `.replit`, empty `_bmad-output/ backups/`, editor swap file, and 3 stale untracked duplicate `STATUS/PROGRESS/DECISIONS.md` inside the nested dir. Verified none were git-tracked.
+- **Tier B (`git rm`):** `python_fixes/` (4 files, no refs), `PRESENTATION.md`, `vertex-command-spec.md`.
+- **Tier C:** `git rm _bmad/` (12 tracked files — recoverable from history; disables `bmad-*` skills until reinstalled). `attached_assets/` pruned **120 → 7 files** (deleted 113 old prompts/screenshots/images/mp4; kept 6 `logo-vertex-*.png` + `.gitkeep`), 47 MB → 3.1 MB.
+- **Kept by user choice:** `node_modules` (707 MB, `npm ci` to rebuild), `_bmad` ignored remnants (10 KB).
+- **Safety gates honored:** secrets `.env` + `.stripe-keys.json` untouched; irreversible local media deletion done only after explicit per-bucket confirmation (auto-classifier blocked the first bundled attempt); zero essential build/app files removed.
+- **Note:** pre-existing uncommitted working-tree changes (Google Sign-In WIP: `useAuth.ts`, `AuthPage.tsx`, `locales/*`, `server/{index,routes,storage}.ts`, `package.json`, `.env.example`) were left untouched.
