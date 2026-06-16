@@ -15,6 +15,7 @@ import {
   Target, AlertCircle, Lightbulb, Wrench
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiUrl } from "@/lib/apiBase";
 
 type TabType = "kb" | "faq" | "status" | "chat";
 
@@ -119,7 +120,7 @@ export default function Help() {
   const { data: systemStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ["/api/v1/system/status"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/system/status", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/system/status"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -172,7 +173,7 @@ export default function Help() {
       const csrfToken = await getCsrfToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (csrfToken) headers["x-csrf-token"] = csrfToken;
-      const response = await fetch("/api/v1/help/chat", {
+      const response = await fetch(apiUrl("/api/v1/help/chat"), {
         method: "POST",
         headers,
         credentials: "include",

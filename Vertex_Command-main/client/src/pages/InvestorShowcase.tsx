@@ -16,6 +16,7 @@ import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   Tooltip, CartesianGrid, Line, ComposedChart
 } from "recharts";
+import { apiUrl } from "@/lib/apiBase";
 
 interface Metrics {
   totalUsers: number;
@@ -65,7 +66,7 @@ export default function InvestorShowcase() {
   const { data: metrics } = useQuery<Metrics>({
     queryKey: ["/api/v1/public/metrics"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/public/metrics");
+      const res = await fetch(apiUrl("/api/v1/public/metrics"));
       if (!res.ok) throw new Error("Failed to fetch metrics");
       return res.json();
     },

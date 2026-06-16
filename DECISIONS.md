@@ -4,6 +4,18 @@ Decision log. Why things were chosen, what was rejected, whether final.
 
 ---
 
+## 2026-06-16 — PIVOT: abandon AWS multi-region; hybrid Vercel SPA + single VPS
+
+- **Decision:** Permanently abandon the AWS multi-region Terraform architecture. New target: **frontend SPA on Vercel** (`https://syncer-q.vercel.app`) + **backend on a single standard VPS** via Docker Compose, reached cross-origin. Branch: `feat/vercel-vps-split` (monorepo retained; Vercel uses Root Directory = nested `Vertex_Command-main/`).
+- **Supersedes:** "2026-06-15 — Step 2: AWS infra (ECR + 3-region Graviton) via Terraform" (now **dead**) and the monitoring half of "2026-06-14 — Production stack = ROOT monolith (Path A)".
+- **Cleanup (deleted):** `infra/terraform/` (all `.tf`, modules, bootstrap, templates, ECR, IAM, state), `infra/backend-go/` (Go engine + ECR `build-push.sh`), `infra/frontend/`, `infra/nodejs-api/`, `infra/nginx/` (microservices proxy), `infra/prometheus/`, `infra/grafana/`, `infra/docker-compose.microservices.yml`, `infra/MIGRATION_CHECKLIST.md`, `infra/README.md`. **Kept:** `infra/vps/{provision.sh,deploy.sh}` (single-host, reusable).
+- **Compose:** root `docker-compose.yml` trimmed to **5 services** — `postgres + vertex-app + analytics + ingress(nginx) + certbot`. Dropped `prometheus` + `grafana` (and `prometheus_data`/`grafana_data` volumes; `nginx.conf` `/grafana/` routes; `deploy.sh` health list). **Nginx + Certbot retained** — mandatory: HTTPS is required for the `Secure` cross-site cookie to function.
+- **Frontend:** prior "Vercel split" commit only wrapped `queryClient.ts` + 3 SSE hooks in `apiUrl()`. Found **~41 relative `fetch("/api/…")` + 6 `window.open`/`window.location.href` backend nav/downloads** still un-prefixed → would hit `syncer-q.vercel.app/api/…` (SPA rewrite serves `index.html`, `res.json()` throws). All now routed through `apiUrl()` (`VITE_API_URL`). `vercel.json` already correct (framework vite, `outputDirectory dist/public`, SPA rewrite) — unchanged.
+- **CORS/cookies (12-Factor, no hardcode):** rejected baking `syncer-q.vercel.app` into `server/index.ts`. Backend already env-driven (`FRONTEND_ORIGINS`, `CROSS_SITE_COOKIES`, `ALLOW_VERCEL_PREVIEWS`) — **no server code change**. Origin injected via env at the VPS + CI. `.env.example` promotes these from OPTIONAL to the active architecture.
+- **CI:** `production.yml` was already SSH+rsync+`deploy.sh` (no Terraform/ECR refs in the workflow itself). Added cross-origin/auth keys to the `.env` write (`FRONTEND_ORIGINS`, `CROSS_SITE_COOKIES`, `ALLOW_VERCEL_PREVIEWS`, `GOOGLE_CLIENT_ID`, `SIGNAL_WEBHOOK_SECRET`); dropped prometheus/grafana from the health-check loop.
+- **Rejected:** keep Terraform "for later" (dead weight, contradicts the pivot); strip nginx too / bare backend (loses HTTPS → breaks `Secure` cookie); split into two repos now (overhead, breaks unified CI — Vercel handles monorepos via Root Directory); hardcode the Vercel domain (violates 12-Factor).
+- **Status:** Implemented on `feat/vercel-vps-split`. Cross-site-cookie fragility caveat from the entry below still stands.
+
 ## 2026-06-16 — Vercel = frontend only; backend stays on a long-lived host
 
 - **Decision:** Deploy the React SPA static to Vercel; run the Express+Postgres backend on a container host (Render/Railway/Fly). Frontend talks to backend cross-origin via `VITE_API_URL`.

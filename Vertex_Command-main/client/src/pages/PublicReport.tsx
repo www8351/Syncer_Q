@@ -7,6 +7,7 @@ import {
   TrendingUp, BarChart3, Target, Activity, Calendar,
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function PublicReport() {
   const { t, i18n } = useTranslation();
@@ -18,7 +19,7 @@ export default function PublicReport() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/v1/public/report/${params.token}`)
+    fetch(apiUrl(`/api/v1/public/report/${params.token}`))
       .then(async (res) => {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));

@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiUrl } from "@/lib/apiBase";
 
 type BrokerKey = "tradovate" | "topstepx";
 type ConnectStep = "select" | "environment" | "auth-method" | "credentials" | "validating" | "connecting" | "discovering" | "importing" | "done" | "error";
@@ -96,7 +97,7 @@ export const BrokerConnectDialog = memo(function BrokerConnectDialog() {
 
   const handleTradovateOAuth = useCallback(async (environment: "demo" | "live") => {
     try {
-      const res = await fetch("/api/v1/integrations/tradovate/oauth/status", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/integrations/tradovate/oauth/status"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to check OAuth status");
       const data = await res.json();
       if (!data.configured) {
@@ -107,7 +108,7 @@ export const BrokerConnectDialog = memo(function BrokerConnectDialog() {
         });
         return;
       }
-      window.location.href = `/api/v1/integrations/tradovate/oauth/start?environment=${environment}`;
+      window.location.href = apiUrl(`/api/v1/integrations/tradovate/oauth/start?environment=${environment}`);
     } catch {
       toast({
         title: t("broker.error"),

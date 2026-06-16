@@ -277,19 +277,15 @@ Pre-import validation checklist per broker. Accounts failing validation are skip
 - Workflow runs with `NODE_OPTIONS='--max-old-space-size=256'`
 - Baseline heap: ~52 MB (down from ~160 MB), well under 120 MB target
 
-## Future Microservices Scaffolding (`infra/`) — NOT production
-> Production target is the **ROOT `docker-compose.yml` (Path A)**. `infra/` is unwired future scaffolding (Go engine + Redis); the app does not connect to it. See `infra/README.md`.
-- `infra/docker-compose.microservices.yml` - **renamed** from `docker-compose.yml` so a bare `docker compose up` in `infra/` can't launch it by accident. Orchestrates the future microservices: Go routing engine, Node.js API, Redis, frontend (Nginx), reverse proxy (Nginx), Certbot
-- `infra/backend-go/` - Go-based low-latency routing engine with: TradingView webhook handler, WebSocket connection manager (persistent broker connections with auto-reconnect), Redis Pub/Sub subscriber for Master→Slave signal fan-out
-- `infra/frontend/Dockerfile` - Multi-stage build: Vite build → Nginx static serving
-- `infra/nodejs-api/Dockerfile` - Multi-stage build: npm build → Node.js production runtime
-- `infra/nginx/` - Reverse proxy config with SSL/TLS (Let's Encrypt), WebSocket keep-alive (`proxy_read_timeout 86400s`), subdomain routing (`api.` → Go backend, `www.` → frontend)
-- `infra/.env.template` - (not present) — the root Path-A stack uses `.env` generated from the root `.env.example`
-- `infra/MIGRATION_CHECKLIST.md` - Step-by-step migration guide (server provisioning, Docker setup, DNS, SSL, deployment, smoke tests, rollback)
+## Deploy architecture (2026-06-16 pivot)
+> **Removed.** The AWS multi-region Terraform stack and the microservices scaffolding were deleted on 2026-06-16. Gone: `infra/terraform/`, `infra/backend-go/` (Go routing engine + Redis fan-out), `infra/frontend/`, `infra/nodejs-api/`, `infra/nginx/`, `infra/docker-compose.microservices.yml`, `infra/MIGRATION_CHECKLIST.md`, `infra/README.md`. See DECISIONS.md (2026-06-16 — PIVOT).
+- **Frontend** → **Vercel** SPA (`https://syncer-q.vercel.app`). Root Directory = the app subdir; `vercel.json` (framework vite, `outputDirectory dist/public`, SPA rewrite). Calls the backend cross-origin via `VITE_API_URL` (all client calls go through `client/src/lib/apiBase.ts` `apiUrl()`).
+- **Backend** → **single VPS**, Docker Compose. `infra/` now holds only `vps/` (`provision.sh` hardening, `deploy.sh`).
+- **Cross-origin**: CORS via `FRONTEND_ORIGINS` (+ optional `ALLOW_VERCEL_PREVIEWS`); session cookie `SameSite=None; Secure` via `CROSS_SITE_COOKIES=true` (backend already env-driven — `server/index.ts` `buildAllowedOrigins()` + cookie block).
 
 ### Docker / Production Containerization
 - `Dockerfile` - Multi-stage build: Stage 1 (builder) installs all deps, builds Vite frontend + esbuild backend; Stage 2 (runner) copies dist/public assets, installs prod deps only, runs as unprivileged `nodeuser` (uid 1001) via tini init
-- `docker-compose.yml` - Orchestrates 7 services: postgres → vertex-app + analytics → prometheus + grafana → ingress (Nginx) → certbot (ssl profile). Node app, analytics, prometheus, and grafana on internal network only (no host port exposure). Separate volumes for SSL certs, certbot webroot, prometheus_data, and grafana_data.
+- `docker-compose.yml` - Orchestrates 5 services: postgres → vertex-app + analytics → ingress (Nginx) → certbot (ssl profile). App + analytics on the internal network only (no host port exposure); only ingress publishes 80/443. Volumes: `pgdata`, `ssl_certs`, `certbot_webroot`. (Prometheus + Grafana were removed in the 2026-06-16 pivot.)
 - `entrypoint.sh` - Startup sequence: pg_isready wait loop (30 retries), drizzle-kit push for schema sync, then exec node dist/index.cjs
 - `.dockerignore` - Excludes node_modules, dist, .git, .local, .env, artifacts, nginx
 
@@ -336,7 +332,10 @@ VPS_HOST, VPS_SSH_PRIVATE_KEY, VPS_SSH_PORT (default 2222), VPS_HOST_FINGERPRINT
 POSTGRES_USER, POSTGRES_PASSWORD, SESSION_SECRET, VERTEX_DOMAIN, CERTBOT_EMAIL,
 TOPSTEPX_API_KEY, TOPSTEPX_USERNAME, TOPSTEPX_PASSWORD, TRADOVATE_CID, TRADOVATE_SECRET,
 STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET, OPENAI_API_KEY, CREDENTIALS_ENCRYPTION_KEY,
-SIGNAL_WEBHOOK_SECRET
+SIGNAL_WEBHOOK_SECRET, GOOGLE_CLIENT_ID
+
+**Required GitHub Actions Variables** (`vars.*`, non-secret): DEPLOY_ENABLED (`true` to allow deploy), FRONTEND_ORIGINS (`https://syncer-q.vercel.app`), CROSS_SITE_COOKIES (`true`), ALLOW_VERCEL_PREVIEWS (optional `true`).
+**Vercel project env (frontend):** VITE_API_URL = `https://<vps-backend-host>`.
 
 ### Algorithmic Signal Ingestion
 - `server/signal-routes.ts` - Signal webhook and mapping management endpoints:
@@ -374,23 +373,9 @@ SIGNAL_WEBHOOK_SECRET
   - `vertex_orphans_detected` (gauge) - Orphan positions from last scan
   - Default Node.js process metrics (CPU, memory, GC, event loop) with `vertex_` prefix
 - **Bridge**: `recordLatency()` in latency-monitor.ts emits to both in-memory store AND Prometheus histograms. WS/SSE gauges synced every 5s via `syncPrometheusGauges()`.
-- **Node.js endpoint**: `GET /metrics` (registered in server/index.ts before routes)
+- **Node.js endpoint**: `GET /metrics` (registered in server/index.ts before routes) — Prometheus exposition format.
 - **Python endpoint**: `GET /metrics` on analytics service via `prometheus-fastapi-instrumentator` (auto-instruments request duration, status codes)
-- `infra/prometheus/prometheus.yml` - Scrape config: vertex-app (5s interval), analytics (15s interval), self (15s)
-- `infra/prometheus/alerts.yml` - Alert rules:
-  - Critical: event loop lag >500ms, broker API p95 >2s, no WS connections
-  - Warning: event loop lag >100ms, broker API p95 >500ms, copy order p95 >1s, DB p95 >200ms, Node >512MB RAM, analytics >256MB RAM, analytics p95 >10s
-  - Info: risk intervention triggered
-- `infra/grafana/provisioning/datasources/prometheus.yml` - Auto-provisions Prometheus as default datasource
-- `infra/grafana/provisioning/dashboards/dashboard.yml` - Auto-provisions dashboard JSON from file
-- `infra/grafana/dashboards/vertex-overview.json` - Pre-built 14-panel dashboard:
-  - Event Loop Lag, HTTP Request Rate, Memory Usage (Node + Python)
-  - Broker API Latency p95, WebSocket Connections (stat), In-Flight Orders
-  - Copy Order Latency p95, Database Latency p95
-  - Risk Interventions (bar), HTTP Duration p95, Analytics Duration p95
-  - Reconciliation Runs (stat), Orphan Positions (stat)
-- **Nginx routing**: Grafana served at `/grafana/` path with WebSocket upgrade support for live features
-- **Access**: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` env vars (default admin/vertex_grafana_change_me)
+- **NOTE (2026-06-16 pivot):** the app still **exposes** `/metrics` (prom-client), but the bundled **Prometheus + Grafana containers and their `infra/prometheus`/`infra/grafana` configs were removed**. To monitor in production, point an external/managed Prometheus (or the VPS host's own) at the backend `/metrics` endpoints; no dashboards ship in-repo anymore.
 
 ## Mobile Responsiveness
 - Hamburger menu button opens slide-out sidebar (replaces bottom nav bar)

@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/apiBase";
 
 interface AdminUser {
   id: number; name: string; email: string; role: string;
@@ -108,7 +109,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/users/${userId}/plan`, {
+      const res = await fetch(apiUrl(`/api/v1/admin/users/${userId}/plan`), {
         method: "PATCH",
         headers: hdrs,
         credentials: "include",
@@ -138,7 +139,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/users/${userId}/role`, {
+      const res = await fetch(apiUrl(`/api/v1/admin/users/${userId}/role`), {
         method: "PATCH",
         headers: hdrs,
         credentials: "include",
@@ -167,7 +168,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/users/${userId}/unlock`, {
+      const res = await fetch(apiUrl(`/api/v1/admin/users/${userId}/unlock`), {
         method: "POST",
         headers: hdrs,
         credentials: "include",
@@ -221,7 +222,7 @@ export default function AdminPage() {
   const { data: systemStatus } = useQuery<SystemStatus>({
     queryKey: ["/api/v1/system/status"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/system/status", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/system/status"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -257,7 +258,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = {};
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch("/api/v1/admin/backup", {
+      const res = await fetch(apiUrl("/api/v1/admin/backup"), {
         method: "POST", headers: hdrs, credentials: "include",
       });
       if (!res.ok) {
@@ -287,7 +288,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch("/api/v1/admin/linked-users", {
+      const res = await fetch(apiUrl("/api/v1/admin/linked-users"), {
         method: "POST", headers: hdrs, credentials: "include",
         body: JSON.stringify({ primaryUserId, linkedUserId }),
       });
@@ -313,7 +314,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = {};
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/linked-users/${id}`, {
+      const res = await fetch(apiUrl(`/api/v1/admin/linked-users/${id}`), {
         method: "DELETE", headers: hdrs, credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to unlink");
@@ -333,7 +334,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch("/api/v1/admin/linked-users/merge-duplicates", {
+      const res = await fetch(apiUrl("/api/v1/admin/linked-users/merge-duplicates"), {
         method: "POST", headers: hdrs, credentials: "include",
         body: JSON.stringify({ primaryUserId, linkedUserId }),
       });
@@ -356,7 +357,7 @@ export default function AdminPage() {
   const { data: securityEventsData, isLoading: secEventsLoading } = useQuery<SecurityEventsResponse>({
     queryKey: ["/api/v1/admin/security-events", secSeverityFilter, secTypeFilter, secLimit],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/admin/security-events?${secQueryParams.toString()}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/admin/security-events?${secQueryParams.toString()}`), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -368,7 +369,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = {};
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/affiliate/apply-reward/${referralId}`, {
+      const res = await fetch(apiUrl(`/api/v1/admin/affiliate/apply-reward/${referralId}`), {
         method: "POST", headers: hdrs, credentials: "include",
       });
       if (!res.ok) throw new Error("Failed");
@@ -388,7 +389,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = {};
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/accounts/${id}`, { method: "DELETE", headers: hdrs, credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/admin/accounts/${id}`), { method: "DELETE", headers: hdrs, credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -418,7 +419,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch("/api/v1/admin/accounts/bulk-delete", {
+      const res = await fetch(apiUrl("/api/v1/admin/accounts/bulk-delete"), {
         method: "POST", credentials: "include",
         headers: hdrs,
         body: JSON.stringify(body),
@@ -453,7 +454,7 @@ export default function AdminPage() {
       const token = await getCsrfToken();
       const hdrs: Record<string, string> = { "Content-Type": "application/json" };
       if (token) hdrs["x-csrf-token"] = token;
-      const res = await fetch(`/api/v1/admin/accounts/${id}/status`, {
+      const res = await fetch(apiUrl(`/api/v1/admin/accounts/${id}/status`), {
         method: "PATCH", credentials: "include",
         headers: hdrs,
         body: JSON.stringify({ status }),

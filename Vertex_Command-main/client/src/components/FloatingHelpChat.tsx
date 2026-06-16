@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { getCsrfToken } from "@/lib/queryClient";
 import { isRTL } from "@/i18n";
 import { MessageCircle, X, Send, Loader2, Bot, Crown } from "lucide-react";
+import { apiUrl } from "@/lib/apiBase";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -42,7 +43,7 @@ export default function FloatingHelpChat() {
       const csrfToken = await getCsrfToken();
       const chatHeaders: Record<string, string> = { "Content-Type": "application/json" };
       if (csrfToken) chatHeaders["x-csrf-token"] = csrfToken;
-      const response = await fetch("/api/v1/help/chat", {
+      const response = await fetch(apiUrl("/api/v1/help/chat"), {
         method: "POST",
         headers: chatHeaders,
         credentials: "include",

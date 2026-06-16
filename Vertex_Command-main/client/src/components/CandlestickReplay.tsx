@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import CandlestickChart, { type CandleData, type TradeMarker } from "./CandlestickChart";
+import { apiUrl } from "@/lib/apiBase";
 
 interface TradeInfo {
   symbol: string | null;
@@ -57,7 +58,7 @@ export default function CandlestickReplay({ trade, onClose: _onClose, t }: Candl
         end: queryEnd,
         interval: "5m",
       });
-      const res = await fetch(`/api/v1/journal/market-data?${params}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/journal/market-data?${params}`), { credentials: "include" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Failed to fetch" }));
         throw new Error(err.message);

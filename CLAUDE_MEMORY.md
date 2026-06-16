@@ -13,8 +13,8 @@ Long-term AI memory: preferences, persistent rules, stack constraints, security 
 
 - **Frontend:** React 19, Vite 7, Tailwind v4, shadcn/ui (Radix), Zustand, TanStack Query, wouter, react-i18next.
 - **Backend:** Node.js 24.x, Express 5, TypeScript 5.6, Drizzle ORM, PostgreSQL 15, `ws`, Passport (local), express-session + connect-pg-simple, Zod.
-- **Services:** Python FastAPI + Pandas (analytics), Go engine (signal fan-out), Stripe, Gmail API, OpenAI.
-- **Infra:** Docker multi-stage, Nginx WAF + TLS, Prometheus + Grafana, GitHub Actions CI/CD, Redis Pub/Sub.
+- **Services:** Python FastAPI + Pandas (analytics), Stripe, Gmail API, OpenAI, Google Identity Services (Sign-In).
+- **Infra (since 2026-06-16 pivot):** **hybrid — frontend SPA on Vercel (`syncer-q.vercel.app`), backend on a single VPS** via Docker Compose (5 services: postgres + vertex-app + analytics + nginx ingress + certbot). Multi-stage Docker, Nginx WAF + TLS (Let's Encrypt), GitHub Actions SSH deploy. **Removed:** AWS multi-region Terraform/ECR, Go routing engine, Redis, Prometheus, Grafana. Frontend↔backend is cross-origin: SPA calls go through `apiUrl()`/`VITE_API_URL`; CORS via `FRONTEND_ORIGINS`; session cookie `SameSite=None; Secure` via `CROSS_SITE_COOKIES=true`.
 
 ## Architectural constraints
 

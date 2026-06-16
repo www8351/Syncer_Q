@@ -26,6 +26,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiUrl } from "@/lib/apiBase";
 
 interface Provider {
   id: number; key: string; name: string; category: string;
@@ -264,7 +265,7 @@ export default function IntegrationsPage() {
 
   const handleTradovateOAuth = useCallback(async (environment: "demo" | "live") => {
     try {
-      const res = await fetch("/api/v1/integrations/tradovate/oauth/status", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/integrations/tradovate/oauth/status"), { credentials: "include" });
       if (!res.ok) {
         toast({ title: t('common.error'), description: "Tradovate OAuth is not available", variant: "destructive" });
         return;
@@ -274,7 +275,7 @@ export default function IntegrationsPage() {
         toast({ title: t('common.error'), description: t("integrations.oauthNotConfigured", { defaultValue: "Tradovate OAuth is not configured. Please contact the administrator." }), variant: "destructive" });
         return;
       }
-      window.location.href = `/api/v1/integrations/tradovate/oauth/start?environment=${environment}`;
+      window.location.href = apiUrl(`/api/v1/integrations/tradovate/oauth/start?environment=${environment}`);
     } catch {
       toast({ title: t('common.error'), description: "Failed to start OAuth", variant: "destructive" });
     }

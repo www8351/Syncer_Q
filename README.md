@@ -22,7 +22,7 @@
 
 **Vertex Command** is a full-stack SaaS platform built for serious prop-firm traders who juggle many funded accounts at once. It connects directly to **Tradovate**, **TopstepX (ProjectX)**, and **Rithmic**, streams live positions and equity, and automatically enforces drawdown rules — flattening accounts at market the moment a breach is detected.
 
-On top of execution it ships a complete **trading journal**, a **Pandas-powered analytics engine**, **copy trading** with risk-managed fan-out, **TradingView signal ingestion**, **Stripe billing**, and a hardened production stack (Nginx WAF, Prometheus + Grafana, CI/CD to a zero-trust VPS).
+On top of execution it ships a complete **trading journal**, a **Pandas-powered analytics engine**, **copy trading** with risk-managed fan-out, **TradingView signal ingestion**, **Stripe billing**, and a hybrid deploy: **SPA on Vercel + hardened backend on a single VPS** (Nginx WAF + TLS, GitHub Actions CI/CD).
 
 The UI is **multi-language** (Hebrew default with full RTL, plus English, Arabic, Spanish).
 
@@ -43,7 +43,7 @@ The UI is **multi-language** (Hebrew default with full RTL, plus English, Arabic
 | 🏛️ **Prop-Firm Rule Engine** | Tier-aware rules per firm (TopstepX/Tradovate/Rithmic), 40% consistency rule, drawdown math, "what to trade today" priority scoring |
 | 💳 **Billing & Plans** | Stripe subscriptions, 7-day trial, 4 tiers, per-plan feature gating + account limits |
 | 🔐 **Security** | AES-256-GCM credential encryption, TOTP 2FA, Helmet CSP, CSRF double-submit, rate limiting, account lockout, CSV-injection guard |
-| 📈 **Observability** | Prometheus metrics, 14-panel Grafana dashboard, SSE system-health stream, dependency scanning, daily DB backups |
+| 📈 **Observability** | `/metrics` endpoint (Prometheus-format), SSE system-health stream, dependency scanning, daily DB backups |
 | 🌍 **i18n + Mobile** | 4 languages with RTL/LTR, theme engine (light/dark + 10 accents), responsive slide-out nav |
 
 ---
@@ -54,9 +54,9 @@ The UI is **multi-language** (Hebrew default with full RTL, plus English, Arabic
 
 **Backend** — Node.js + Express 5 · TypeScript · Drizzle ORM · PostgreSQL 15 · WebSocket (`ws`) · Passport (local) · express-session + connect-pg-simple · Zod
 
-**Services** — Python FastAPI + Pandas (analytics) · Go routing engine (low-latency signal fan-out) · Stripe · Gmail API · OpenAI
+**Services** — Python FastAPI + Pandas (analytics) · Stripe · Gmail API · OpenAI · Google Identity Services (Sign-In)
 
-**Infra** — Docker (multi-stage) · Nginx (WAF + TLS) · Prometheus · Grafana · GitHub Actions CI/CD · Redis Pub/Sub
+**Infra** — Vercel (frontend SPA) · single VPS via Docker Compose (multi-stage) · Nginx (WAF + TLS, Let's Encrypt) · GitHub Actions CI/CD (SSH deploy)
 
 ---
 
@@ -64,7 +64,8 @@ The UI is **multi-language** (Hebrew default with full RTL, plus English, Arabic
 
 ```mermaid
 flowchart TD
-    U[Browser · React 19 SPA] -->|HTTPS| NG[Nginx Ingress / WAF + TLS]
+    U[Browser] -->|static SPA| VER[Vercel · React 19 SPA]
+    VER -->|cross-origin HTTPS · VITE_API_URL| NG[VPS · Nginx Ingress / WAF + TLS]
     TV[TradingView Webhook] -->|HMAC SHA-256| NG
     NG --> API[Node.js + Express API]
     API --> PG[(PostgreSQL 15 · Drizzle)]
@@ -73,9 +74,10 @@ flowchart TD
     API <-->|WS / fast-poll| BRK[Brokers: Tradovate · TopstepX · Rithmic]
     API --> RISK[Risk Enforcer → auto-flatten]
     API --> COPY[Copy Engine + Reconciliation Daemon]
-    API -->|/metrics| PROM[Prometheus] --> GRAF[Grafana]
     API --> STR[Stripe Billing]
 ```
+
+> **Deploy topology:** the SPA is served by **Vercel** (`syncer-q.vercel.app`); it calls the **VPS backend** cross-origin via `VITE_API_URL`. CORS allows the Vercel origin (`FRONTEND_ORIGINS`) and the session cookie is `SameSite=None; Secure` (`CROSS_SITE_COOKIES=true`).
 
 **Data flow in one line:** broker streams → equity tick processor → rule engine → on breach the risk-enforcer cancels orders + closes positions at market, writes an audit trail, and pushes a Discord/Telegram webhook.
 
@@ -157,11 +159,12 @@ App serves on **http://localhost:5000** (Express + Vite middleware — API and S
 │   └── ...
 ├── shared/              # Drizzle schema (core, integrations, billing, copy, journal)
 ├── analytics/           # Python FastAPI + Pandas microservice
-├── infra/               # Production compose, Go engine, Nginx, Prometheus, Grafana, VPS scripts
+├── infra/vps/           # Single-VPS scripts: provision.sh (hardening), deploy.sh
 ├── nginx/               # Ingress / WAF config + TLS bootstrap
 ├── migrations/          # SQL migrations
+├── vercel.json          # Vercel SPA config (framework vite, dist/public, SPA rewrite)
 ├── Dockerfile           # Multi-stage app image
-├── docker-compose.yml       # Full production stack (7 services)
+├── docker-compose.yml       # Backend stack (5 services: postgres + app + analytics + nginx + certbot)
 └── docker-compose.dev.yml   # Dev PostgreSQL only
 ```
 
@@ -206,40 +209,49 @@ Plan features are enforced server-side via `requirePlanFeature()` (fail-closed);
 
 ## 🚢 Deployment
 
-> **Production target: the ROOT monolith stack (Path A)** — the `docker-compose.yml` at the project root. The `infra/` directory is **future microservices scaffolding — not wired to the app, not for production** (see [`infra/README.md`](infra/README.md)).
+**Hybrid split:** the React SPA is hosted on **Vercel** (`https://syncer-q.vercel.app`); the Express + Postgres backend runs on a **single VPS** as a 5-service Docker Compose stack (`postgres → vertex-app + analytics → ingress (Nginx) → certbot`). The SPA calls the backend cross-origin via `VITE_API_URL`; everything but the Nginx ingress (host 80/443) stays on the internal network.
 
-Production ships as a **7-service Docker Compose** stack: `postgres → vertex-app + analytics → prometheus + grafana → ingress (Nginx) → certbot (ssl profile)`, fronted by an Nginx WAF with TLS 1.2/1.3, HSTS, rate-limit zones, and SSE passthrough. Only the ingress publishes host ports 80/443; everything else stays on the internal network.
+### A · Frontend → Vercel
 
-### 1 · Configure `.env`
+In the Vercel project (Settings):
+- **Root Directory** = `Vertex_Command-main` (the app lives in the nested subdir; Vercel handles monorepos natively).
+- **Environment Variable** (Production + Preview): `VITE_API_URL=https://<vps-backend-host>` (e.g. `https://api.syncer-q.com`).
+- Framework auto-detected as **vite**; build command + output dir come from `vercel.json` (`npx vite build` → `dist/public`, with an SPA rewrite of `/(.*)` → `/index.html`).
+
+### B · Backend → single VPS
+
+**1 · Provision** (fresh Debian/Ubuntu, as root): `infra/vps/provision.sh` (UFW, fail2ban, SSH hardening, Docker + Compose).
+
+**2 · Configure `.env`**
 ```bash
 cp .env.example .env
-# Fill the REQUIRED keys. Generate the secrets with:
 openssl rand -hex 32     # SESSION_SECRET, and CREDENTIALS_ENCRYPTION_KEY (must be 64 hex)
 ```
-Mandatory: `POSTGRES_PASSWORD`, `SESSION_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`. `.env` is required in practice — `CREDENTIALS_ENCRYPTION_KEY` and `SIGNAL_WEBHOOK_SECRET` reach the app **only** through it. See `.env.example` for the full REQUIRED/OPTIONAL list.
+Mandatory: `POSTGRES_PASSWORD`, `SESSION_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`, `VERTEX_DOMAIN`, `CERTBOT_EMAIL`.
+**Cross-origin (required for the Vercel SPA):** `FRONTEND_ORIGINS=https://syncer-q.vercel.app`, `CROSS_SITE_COOKIES=true`, `ALLOW_VERCEL_PREVIEWS=true` (optional), `GOOGLE_CLIENT_ID=<oauth-web-client-id>`. See `.env.example` for the full list.
 
-### 2 · Build
+**3 · Build & start**
 ```bash
-docker compose build      # builds Node (app), Python (analytics), Nginx (ingress) images
+docker compose build
+docker compose up -d                          # 5-service stack (publishes host 80/443)
+docker compose --profile ssl up -d certbot    # real Let's Encrypt TLS (after DNS points here)
 ```
+The ingress self-signs a 30-day bootstrap cert on first start, so HTTPS works immediately; the `certbot` profile replaces it. Migrations run on boot via `entrypoint.sh` (`drizzle-kit push`).
 
-### 3 · Start
-```bash
-docker compose up -d                          # full stack (publishes host 80/443)
-docker compose --profile ssl up -d certbot    # real Let's Encrypt TLS (after DNS points at the host)
-```
-The ingress self-signs a 30-day bootstrap cert on first start, so HTTPS works immediately; the `certbot` profile replaces it with a real certificate. Schema migrations run automatically on boot via `entrypoint.sh` (`drizzle-kit push`).
-
-> **Dev box where 80/443 are taken?** Override the published ports — `HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d`.
-
-### 4 · Verify
+**4 · Verify**
 ```bash
 docker compose ps                                                            # all → healthy
 docker compose exec vertex-app wget -qO- http://127.0.0.1:5000/api/health    # {"services":{"database":true}}
-curl -k https://localhost/api/health                                         # 200 through the Nginx ingress
+curl -k https://localhost/api/health                                         # 200 through Nginx
 ```
 
-CI/CD via **GitHub Actions**: type-check + dependency/secret audit → Docker buildx validation → SSH deploy to a hardened VPS with rolling restart, health-gated **automatic rollback**, and image pruning. Full server walkthrough: [`infra/MIGRATION_CHECKLIST.md`](infra/MIGRATION_CHECKLIST.md).
+### C · Google Sign-In
+
+Add `https://syncer-q.vercel.app` to **Authorized JavaScript origins** in Google Cloud Console (GIS ID-token flow needs no redirect URI). See `GOOGLE_SIGNIN_SETUP.md`.
+
+### CI/CD
+
+**GitHub Actions** (`.github/workflows/production.yml`): type-check + dependency/secret audit → Docker buildx validation → (manual, gated) SSH deploy to the VPS running `infra/vps/deploy.sh` with rolling restart, health-gated **automatic rollback**, and image pruning. Deploy is gated behind `workflow_dispatch` + `vars.DEPLOY_ENABLED=='true'`.
 
 ---
 

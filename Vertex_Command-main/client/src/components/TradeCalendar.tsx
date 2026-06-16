@@ -6,6 +6,7 @@ import { useCurrency } from "@/hooks/useCurrency";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { apiUrl } from "@/lib/apiBase";
 
 interface CalendarData {
   days: Record<string, { pnl: number; trades: number }>;
@@ -33,7 +34,7 @@ export default function TradeCalendar({ accountId, accounts }: TradeCalendarProp
   const { data: calendarData } = useQuery<CalendarData>({
     queryKey: ["/api/v1/trades/calendar", calendarMonth, effectiveAccountId],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/trades/calendar?month=${calendarMonth}&accountId=${effectiveAccountId}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/trades/calendar?month=${calendarMonth}&accountId=${effectiveAccountId}`), { credentials: "include" });
       return res.json();
     },
   });

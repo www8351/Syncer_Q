@@ -89,7 +89,7 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 
 HEALTHY=true
-for SVC in postgres vertex-app analytics prometheus grafana ingress; do
+for SVC in postgres vertex-app analytics ingress; do
   STATUS=$(docker compose ps --format "{{.Status}}" "$SVC" 2>/dev/null | head -1)
   if echo "$STATUS" | grep -qi "up"; then
     log "✓ $SVC: $STATUS"

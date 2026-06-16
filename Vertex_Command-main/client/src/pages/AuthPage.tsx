@@ -11,6 +11,7 @@ import { isRTL } from "@/i18n";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { clearCsrfToken } from "@/lib/queryClient";
 import TurnstileWidget from "@/components/TurnstileWidget";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function AuthPage() {
   const { t, i18n } = useTranslation();
@@ -46,7 +47,7 @@ export default function AuthPage() {
   const { data: turnstileConfig } = useQuery({
     queryKey: ["/api/v1/auth/turnstile-config"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/auth/turnstile-config");
+      const res = await fetch(apiUrl("/api/v1/auth/turnstile-config"));
       return res.json() as Promise<{ siteKey: string; enabled: boolean }>;
     },
     staleTime: Infinity,
@@ -55,7 +56,7 @@ export default function AuthPage() {
   const { data: googleConfig } = useQuery({
     queryKey: ["/api/v1/auth/google-config"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/auth/google-config");
+      const res = await fetch(apiUrl("/api/v1/auth/google-config"));
       return res.json() as Promise<{ clientId: string; enabled: boolean }>;
     },
     staleTime: Infinity,

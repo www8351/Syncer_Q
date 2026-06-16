@@ -24,6 +24,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import type { Account, Withdrawal, BalanceHistory } from "@shared/schema";
 import type { JournalEntry } from "@shared/journal-schema";
+import { apiUrl } from "@/lib/apiBase";
 
 interface EnrichedJournalEntry extends JournalEntry {
   sourcePlatform?: string;
@@ -91,7 +92,7 @@ export default function Reports() {
   const { data: taxReport, isLoading: taxLoading } = useQuery<TaxReportData>({
     queryKey: ["/api/v1/journal/tax-report", taxYear],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/journal/tax-report?year=${taxYear}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/journal/tax-report?year=${taxYear}`), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load tax report");
       return res.json();
     },
@@ -100,7 +101,7 @@ export default function Reports() {
   const { data: sharedReports = [], isLoading: sharedLoading } = useQuery<SharedReportData[]>({
     queryKey: ["/api/v1/reports/shared"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/reports/shared", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/reports/shared"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load shared reports");
       return res.json();
     },
@@ -126,7 +127,7 @@ export default function Reports() {
   });
 
   const handleExportTaxCSV = () => {
-    window.open(`/api/v1/journal/tax-report/export?year=${taxYear}`, "_blank");
+    window.open(apiUrl(`/api/v1/journal/tax-report/export?year=${taxYear}`), "_blank");
   };
 
   const copyShareLink = async (token: string) => {
@@ -422,7 +423,7 @@ function AccountReportsTab() {
   const { data: accounts = [] } = useQuery<Account[]>({
     queryKey: ["/api/v1/accounts"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/accounts", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/accounts"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load accounts");
       return res.json();
     },
@@ -438,7 +439,7 @@ function AccountReportsTab() {
       if (accountId) params.set("accountId", String(accountId));
       if (appliedFrom) params.set("dateFrom", appliedFrom);
       if (appliedTo) params.set("dateTo", appliedTo);
-      const res = await fetch(`/api/v1/journal/entries?${params}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/journal/entries?${params}`), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load entries");
       return res.json();
     },
@@ -448,7 +449,7 @@ function AccountReportsTab() {
   const { data: balanceHistoryRaw = [] } = useQuery<BalanceHistory[]>({
     queryKey: ["/api/v1/balance-history", accountId],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/balance-history/${accountId}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/balance-history/${accountId}`), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load balance history");
       return res.json();
     },
@@ -467,7 +468,7 @@ function AccountReportsTab() {
   const { data: withdrawals = [] } = useQuery<Withdrawal[]>({
     queryKey: ["/api/v1/withdrawals", accountId],
     queryFn: async () => {
-      const res = await fetch("/api/v1/withdrawals", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/withdrawals"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load withdrawals");
       return res.json();
     },
@@ -608,7 +609,7 @@ function AccountReportsTab() {
     params.set("tab", subTab);
     if (appliedFrom) params.set("dateFrom", appliedFrom);
     if (appliedTo) params.set("dateTo", appliedTo);
-    window.open(`/api/v1/reports/account-pdf?${params}`, "_blank");
+    window.open(apiUrl(`/api/v1/reports/account-pdf?${params}`), "_blank");
   };
 
   const subTabs: { key: SubTab; label: string }[] = [

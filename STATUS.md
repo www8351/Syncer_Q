@@ -4,11 +4,20 @@ _Last updated: 2026-06-16_
 
 ## Where the project stands
 
-**Active (uncommitted) on `feat/google-signin`:** Vercel split-deploy implemented — SPA → Vercel, backend Docker → Render/Railway/Fly. Diagnosed the `404: NOT_FOUND` (wrong Vercel root dir + backend is stateful, can't run serverless). Frontend now uses a configurable API base (`VITE_API_URL`); backend gained cross-origin CORS (`FRONTEND_ORIGINS`) + `SameSite=None` cookie toggle (`CROSS_SITE_COOKIES`). `npx vite build` passes. Not committed. See PROGRESS/DECISIONS 2026-06-16.
+**Active (uncommitted) on `feat/vercel-vps-split`:** Architecture pivoted — **AWS multi-region Terraform permanently abandoned**. New target: SPA → **Vercel** (`https://syncer-q.vercel.app`), backend → **single VPS** Docker Compose, cross-origin. Did the surgical cleanup + completed the unfinished frontend wiring. `npx vite build` passes (exit 0). Not committed. See PROGRESS/DECISIONS 2026-06-16 (pivot).
 
-Step 2 (AWS infra as Terraform) **merged to main**. **PR #2 merged (merge commit `b2d3ddc`) on 2026-06-16** — checks green (Static Analysis + Docker Build = success; Deploy + Supabase Preview = skipped). Terraform NOT applied (billable; operator runs apply). Containerization (Step 1) previously finalized; **PR #1 merged to main (4561dac) on 2026-06-14**; main CI green; no production deploy fired.
+History: Step 2 (AWS Terraform) was merged via PR #2 (`b2d3ddc`) but is now **dead/deleted** by this pivot. Step 1 containerization merged via PR #1 (`4561dac`, 2026-06-14).
 
-## Done
+## Done (this session — the pivot)
+
+- **Deleted AWS/microservices/monitoring IaC** (`git rm`): `infra/terraform/` (all), `infra/backend-go/`, `infra/frontend/`, `infra/nodejs-api/`, `infra/nginx/`, `infra/prometheus/`, `infra/grafana/`, `infra/docker-compose.microservices.yml`, `infra/MIGRATION_CHECKLIST.md`, `infra/README.md`. `infra/` now holds only `vps/` (provision.sh + deploy.sh, kept — single-host reusable).
+- **Compose trimmed to 5 services** (`postgres + vertex-app + analytics + ingress + certbot`); dropped prometheus/grafana + their volumes; `nginx.conf` `/grafana/` routes removed; `deploy.sh` health list trimmed. Nginx+Certbot kept (HTTPS → `Secure` cookie).
+- **Frontend cross-origin completed:** wrapped ~41 relative `fetch("/api/…")` (16 files) + 6 `window.open`/`window.location.href` backend nav/downloads in `apiUrl()`. Grep confirms **0** un-wrapped `/api` fetches in `client/src`. `npx vite build` exit 0.
+- **CORS/cookies:** 12-Factor — no code change (backend already env-driven). `.env.example` promotes `FRONTEND_ORIGINS`/`CROSS_SITE_COOKIES`/`ALLOW_VERCEL_PREVIEWS` to active + sets syncer-q example; Grafana env block removed.
+- **CI:** `production.yml` `.env` write gained `FRONTEND_ORIGINS`/`CROSS_SITE_COOKIES`/`ALLOW_VERCEL_PREVIEWS`/`GOOGLE_CLIENT_ID`/`SIGNAL_WEBHOOK_SECRET`; health-check loop dropped prometheus/grafana.
+- **Docs:** DECISIONS/STATUS/PROGRESS/README/CLAUDE_MEMORY updated for the pivot.
+
+## Done (earlier — containerization, retained)
 
 - **End-to-end verified (fresh deploy):** `docker compose build` (Node/Python/nginx) + `up -d` → postgres, vertex-app, analytics, prometheus, grafana all **healthy**; ingress routes over TLS. `/api/health`=200 (`database:true`), `/metrics` served, analytics `/health` healthy, 49 tables migrated.
 - **3 blocking build/run bugs found & fixed:** (1) `drizzle-kit` was a devDep → not in runtime image → migrations silently skipped; moved to prod deps. (2) healthchecks probed `localhost` → musl resolves IPv6 first while app listens IPv4 → false `unhealthy`; switched to `127.0.0.1` + longer `start_period`. (3) analytics crashed on import — `Instrumentator(metric_namespace=…)` removed in instrumentator v6; dropped the kwargs.
@@ -24,13 +33,13 @@ Step 2 (AWS infra as Terraform) **merged to main**. **PR #2 merged (merge commit
 
 ## Open / In progress
 
-- PR #1 merged to main (verified: `Deploy to VPS`=skipped); its feature branch deleted.
-- **Step 2 — AWS infra (Terraform) MERGED to main via PR #2 (`b2d3ddc`, 2026-06-16).** `infra/terraform/` (ECR + 3 ARM64 EC2 in us-east-1/eu-central-1/ap-northeast-1, IAM ECR-readonly, hardened via provision.sh + ECR cred helper, S3/DynamoDB state). `infra/backend-go/Dockerfile` made ARM64-capable. **Validated** (`terraform validate` ok, `fmt` clean) but **NOT applied** (billable — operator runs apply per `infra/terraform/README.md`).
-- **Repo/disk cleanup done (Tiers A+B+C).** Removed local junk + `git rm` of `python_fixes/`, `PRESENTATION.md`, `vertex-command-spec.md`, `_bmad/`; pruned `attached_assets` 47 MB → 3.1 MB (kept logos). Kept (user choice): `node_modules`, `_bmad` remnants. Secrets untouched. See DECISIONS/PROGRESS (2026-06-15).
+- **Step 2 — AWS multi-region Terraform: DELETED by the 2026-06-16 pivot** (was merged via PR #2 `b2d3ddc`, never applied — billable). All of `infra/terraform/` + `infra/backend-go/` removed. No AWS resources were ever created, so nothing to tear down.
+- PR #1 (containerization) merged to main (`4561dac`); branch deleted.
+- **Repo/disk cleanup done earlier (Tiers A+B+C).** See DECISIONS/PROGRESS (2026-06-15).
 
 ## Next best action
 
-- Provision the VPS, then enable deploy: add deploy secrets, set repo variable `vars.DEPLOY_ENABLED=true`, run via `workflow_dispatch` (see DECISIONS.md / workflow comments). Separately: chip away at the 133 `tsc` errors, then revert `continue-on-error` to restore the hard type gate.
+- **Commit** the pivot on `feat/vercel-vps-split`, open PR. **Vercel:** create project, Root Directory = `Vertex_Command-main`, set `VITE_API_URL=https://<vps-backend-host>`. **VPS:** provision (`infra/vps/provision.sh`), set `.env` (incl. `FRONTEND_ORIGINS=https://syncer-q.vercel.app`, `CROSS_SITE_COOKIES=true`, `VERTEX_DOMAIN`, `CERTBOT_EMAIL`, `GOOGLE_CLIENT_ID`), then enable deploy (`vars.DEPLOY_ENABLED=true`, `workflow_dispatch`). **Google Cloud Console:** add `https://syncer-q.vercel.app` to Authorized JavaScript origins. Separately: chip at the 133 `tsc` errors, then restore the hard type gate.
 
 ## Blockers / Waiting
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { apiUrl } from "@/lib/apiBase";
 
 interface WebhookStatus {
   webhookEnabled: boolean;
@@ -30,7 +31,7 @@ export function WebhookSettings() {
   const { data: status } = useQuery<WebhookStatus>({
     queryKey: ["/api/v1/settings/webhooks"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/settings/webhooks", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/settings/webhooks"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -38,7 +39,7 @@ export function WebhookSettings() {
 
   const saveMutation = useMutation({
     mutationFn: async (body: Record<string, any>) => {
-      const res = await fetch("/api/v1/settings/webhooks", {
+      const res = await fetch(apiUrl("/api/v1/settings/webhooks"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -62,7 +63,7 @@ export function WebhookSettings() {
 
   const testMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/v1/settings/webhooks/test", {
+      const res = await fetch(apiUrl("/api/v1/settings/webhooks/test"), {
         method: "POST",
         credentials: "include",
       });

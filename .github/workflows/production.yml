@@ -200,6 +200,11 @@ jobs:
           STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           CREDENTIALS_ENCRYPTION_KEY=${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}
+          SIGNAL_WEBHOOK_SECRET=${{ secrets.SIGNAL_WEBHOOK_SECRET }}
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          FRONTEND_ORIGINS=${{ vars.FRONTEND_ORIGINS }}
+          ALLOW_VERCEL_PREVIEWS=${{ vars.ALLOW_VERCEL_PREVIEWS }}
+          CROSS_SITE_COOKIES=${{ vars.CROSS_SITE_COOKIES }}
           DOTENV
             chmod 600 "$ENV_TMP"
             mv "$ENV_TMP" "$ENV_FINAL"
@@ -221,7 +226,7 @@ jobs:
           ssh vertex-vps << 'HEALTHEOF'
             cd ${{ env.DEPLOY_DIR }}
             FAILED=0
-            for SVC in postgres vertex-app analytics prometheus grafana ingress; do
+            for SVC in postgres vertex-app analytics ingress; do
               STATUS=$(docker compose ps --format "{{.Status}}" "$SVC" 2>/dev/null | head -1)
               if echo "$STATUS" | grep -qi "up"; then
                 echo "✓ $SVC: $STATUS"

@@ -62,6 +62,7 @@ import { useTradingStream } from "@/hooks/useTradingStream";
 import { EquityCurveChart } from "@/components/EquityCurveChart";
 import { DrawdownEvaluatorWidget } from "@/pages/DrawdownEvaluator";
 import { useTheme, ACCENT_PRESETS, type ThemeMode, type AccentColor } from "@/hooks/useTheme";
+import { apiUrl } from "@/lib/apiBase";
 
 
 
@@ -205,7 +206,7 @@ function useLiveMarketPrices() {
   const { data } = useQuery<{ quotes: MarketQuote[]; fetchedAt: number; delayMinutes: number }>({
     queryKey: ["/api/v1/market/quotes", symbols],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/market/quotes?symbols=${symbols}`, { credentials: "include" });
+      const res = await fetch(apiUrl(`/api/v1/market/quotes?symbols=${symbols}`), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load market quotes");
       return res.json();
     },
@@ -931,7 +932,7 @@ export default function Dashboard() {
   const [totalConnections, setTotalConnections] = useState<number | null>(null);
   useEffect(() => {
     const fetchStats = () => {
-      fetch('/api/v1/community-stats', { credentials: 'include' })
+      fetch(apiUrl('/api/v1/community-stats'), { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
         .then(data => { if (data) setTotalConnections(data.totalConnections); })
         .catch(() => {});
@@ -1036,7 +1037,7 @@ export default function Dashboard() {
   const { data: econThisWeek = [] } = useQuery<EconEvent[]>({
     queryKey: ["/api/v1/economic-calendar", "thisweek"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/economic-calendar?period=thisweek", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/economic-calendar?period=thisweek"), { credentials: "include" });
       return res.json();
     },
   });
@@ -1044,7 +1045,7 @@ export default function Dashboard() {
   const { data: econNextWeek = [] } = useQuery<EconEvent[]>({
     queryKey: ["/api/v1/economic-calendar", "nextweek"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/economic-calendar?period=nextweek", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/economic-calendar?period=nextweek"), { credentials: "include" });
       return res.json();
     },
     enabled: econPeriod === "nextWeek",
@@ -1503,7 +1504,7 @@ export default function Dashboard() {
 
   const handleExport = async (type: string) => {
     try {
-      const res = await fetch(`/api/v1/export/${type}`);
+      const res = await fetch(apiUrl(`/api/v1/export/${type}`));
       if (!res.ok) {
         if (res.status === 403) {
           try {

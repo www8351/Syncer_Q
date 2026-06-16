@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { subDays, subMonths, startOfDay } from "date-fns";
+import { apiUrl } from "@/lib/apiBase";
 
 const CHART_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#ec4899"];
 const UP_COLOR = "#4ade80";
@@ -88,7 +89,7 @@ function getDateParams(range: DateRange): { from?: string; to?: string } {
 
 async function fetchAnalytics<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`/api/v1/analytics/${endpoint}${qs ? "?" + qs : ""}`, { credentials: "include" });
+  const res = await fetch(apiUrl(`/api/v1/analytics/${endpoint}${qs ? "?" + qs : ""}`), { credentials: "include" });
   if (!res.ok) {
     if (res.status === 502 || res.status === 504) throw new Error("Analytics service unavailable");
     throw new Error(`Analytics error: ${res.status}`);

@@ -38,6 +38,7 @@ import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   Tooltip, CartesianGrid
 } from "recharts";
+import { apiUrl } from "@/lib/apiBase";
 
 interface JournalEntry {
   id: number;
@@ -482,7 +483,7 @@ export default function Journal() {
       const csvCsrfToken = await getCsrfToken();
       const csvHeaders: Record<string, string> = {};
       if (csvCsrfToken) csvHeaders["x-csrf-token"] = csvCsrfToken;
-      const res = await fetch("/api/v1/journal/import-csv", {
+      const res = await fetch(apiUrl("/api/v1/journal/import-csv"), {
         method: "POST",
         headers: csvHeaders,
         body: formData,
@@ -507,11 +508,11 @@ export default function Journal() {
   }
 
   function handleExportCSV() {
-    window.open("/api/v1/journal/export?format=csv", "_blank");
+    window.open(apiUrl("/api/v1/journal/export?format=csv"), "_blank");
   }
 
   function handleExportNotion() {
-    window.open("/api/v1/journal/export?format=notion", "_blank");
+    window.open(apiUrl("/api/v1/journal/export?format=notion"), "_blank");
   }
 
   async function syncAccount(accountId: number) {

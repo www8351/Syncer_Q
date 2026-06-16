@@ -10,6 +10,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiUrl } from "@/lib/apiBase";
 
 interface ChecklistItem {
   id: string;
@@ -211,7 +212,7 @@ export default function LatencyMonitor() {
   const { data, isLoading, isError, error, refetch, dataUpdatedAt } = useQuery<LatencyData>({
     queryKey: ["/api/v1/system/latency"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/system/latency", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/v1/system/latency"), { credentials: "include" });
       if (!res.ok) {
         if (res.status === 403) throw new Error("ACCESS_DENIED");
         throw new Error("Failed to fetch latency data");
