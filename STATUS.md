@@ -4,6 +4,8 @@ _Last updated: 2026-06-16_
 
 ## Where the project stands
 
+**Active (uncommitted) on `feat/google-signin`:** Vercel split-deploy implemented — SPA → Vercel, backend Docker → Render/Railway/Fly. Diagnosed the `404: NOT_FOUND` (wrong Vercel root dir + backend is stateful, can't run serverless). Frontend now uses a configurable API base (`VITE_API_URL`); backend gained cross-origin CORS (`FRONTEND_ORIGINS`) + `SameSite=None` cookie toggle (`CROSS_SITE_COOKIES`). `npx vite build` passes. Not committed. See PROGRESS/DECISIONS 2026-06-16.
+
 Step 2 (AWS infra as Terraform) **merged to main**. **PR #2 merged (merge commit `b2d3ddc`) on 2026-06-16** — checks green (Static Analysis + Docker Build = success; Deploy + Supabase Preview = skipped). Terraform NOT applied (billable; operator runs apply). Containerization (Step 1) previously finalized; **PR #1 merged to main (4561dac) on 2026-06-14**; main CI green; no production deploy fired.
 
 ## Done

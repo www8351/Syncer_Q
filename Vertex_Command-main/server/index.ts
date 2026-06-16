@@ -167,6 +167,21 @@ function buildAllowedOrigins(): (string | RegExp)[] {
     origins.push(`https://${customDomain.trim()}`);
   }
 
+  // Split-deploy frontend origins (e.g. Vercel SPA calling this backend cross-origin).
+  // Comma-separated list of exact origins, e.g. "https://vertex.vercel.app".
+  const frontendOrigins = process.env.FRONTEND_ORIGINS;
+  if (frontendOrigins) {
+    for (const o of frontendOrigins.split(",")) {
+      const trimmed = o.trim();
+      if (trimmed) origins.push(trimmed);
+    }
+  }
+
+  // Allow Vercel preview deployments (changing subdomains) when explicitly enabled.
+  if (process.env.ALLOW_VERCEL_PREVIEWS === "true") {
+    origins.push(/^https:\/\/[a-z0-9-]+\.vercel\.app$/);
+  }
+
   if (origins.length === 0) {
     origins.push(/^https?:\/\/localhost(:\d+)?$/);
     if (process.env.REPL_SLUG && process.env.REPL_OWNER) {
@@ -260,7 +275,9 @@ app.use(
       maxAge: 30 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      // Cross-site (Vercel SPA → this backend) requires SameSite=None; Secure.
+      // Same-origin/local dev stays Lax.
+      sameSite: process.env.CROSS_SITE_COOKIES === "true" ? "none" : "lax",
     },
   })
 );

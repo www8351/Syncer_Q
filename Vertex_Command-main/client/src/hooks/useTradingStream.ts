@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/apiBase";
 
 export interface WSConnectionState {
   connectionId: number;
@@ -51,7 +52,7 @@ export function useTradingStream(onSlippageBlocked?: (event: StreamEvent) => voi
       eventSourceRef.current.close();
     }
 
-    const es = new EventSource("/api/v1/trading/stream");
+    const es = new EventSource(apiUrl("/api/v1/trading/stream"), { withCredentials: true });
     eventSourceRef.current = es;
 
     es.onopen = () => {

@@ -1,11 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { apiUrl } from "./apiBase";
 
 let csrfToken: string | null = null;
 let csrfFetchPromise: Promise<string | null> | null = null;
 
 async function fetchCsrfToken(): Promise<string | null> {
   try {
-    const res = await fetch("/api/v1/csrf-token", { credentials: "include" });
+    const res = await fetch(apiUrl("/api/v1/csrf-token"), { credentials: "include" });
     if (res.ok) {
       const data = await res.json();
       csrfToken = data.csrfToken;
@@ -104,7 +105,7 @@ export async function safeBrokerFetch<T = any>(
     const token = await getCsrfToken();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token) headers["x-csrf-token"] = token;
-    res = await fetch(url, {
+    res = await fetch(apiUrl(url), {
       method: "POST",
       headers,
       body: JSON.stringify(body),
@@ -150,7 +151,7 @@ export async function apiRequest(
     if (token) headers["x-csrf-token"] = token;
   }
 
-  let res = await fetch(url, {
+  let res = await fetch(apiUrl(url), {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -165,7 +166,7 @@ export async function apiRequest(
         const newToken = await refreshCsrfToken();
         if (newToken) {
           headers["x-csrf-token"] = newToken;
-          res = await fetch(url, {
+          res = await fetch(apiUrl(url), {
             method,
             headers,
             body: data ? JSON.stringify(data) : undefined,
@@ -186,7 +187,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(apiUrl(queryKey.join("/") as string), {
       credentials: "include",
     });
 

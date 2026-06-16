@@ -91,6 +91,20 @@ Once the workflow ran from the repo root for the first time, three pre-existing 
 - **Safety:** Terraform NOT applied (billable). No app logic changed; secrets untouched.
 - **Next:** operator runs `terraform apply` per `infra/terraform/README.md`; later steps — Global Accelerator + 443 lockdown, engine app-wiring.
 
+## 2026-06-16 — Vercel split deploy: frontend on Vercel, backend on Render/Railway/Fly
+
+Branch: `feat/google-signin`. Diagnosed the `404: NOT_FOUND` on the Vercel domain and implemented the SPA-only split.
+
+- **Root cause of 404 (two):** (1) git root is the outer wrapper dir; the app lives in the `Vertex_Command-main/` subdir, so Vercel scanned root, found no framework/output → 404. (2) Wrong tool: the Express server is long-lived/stateful (broker WebSockets, SSE, background daemons, in-memory rate-limit/idempotency locks, PG sessions) — cannot run on Vercel serverless.
+- **Decision (user):** deploy SPA static to Vercel; backend Docker stack to Render/Railway/Fly; frontend calls backend cross-origin. See DECISIONS.md.
+- **Frontend refactor (configurable API base):** new `client/src/lib/apiBase.ts` (`API_BASE` from `VITE_API_URL`, `apiUrl()` helper). Wrapped all 5 fetch sites in `queryClient.ts` and all 3 `EventSource` sites (`useTradingStream.ts`, `useTelemetryStream.ts`, `SystemHealth.tsx`) — SSE also gained `withCredentials: true` (cookies don't cross origin otherwise).
+- **Backend (`server/index.ts`):** `buildAllowedOrigins()` now reads `FRONTEND_ORIGINS` (comma list) + optional `ALLOW_VERCEL_PREVIEWS` regex for `*.vercel.app`; session cookie `sameSite` is `none` when `CROSS_SITE_COOKIES=true` (else `lax` for local/same-origin). `cors({credentials:true})` already present.
+- **Config:** new `Vertex_Command-main/vercel.json` (framework vite, `buildCommand: npx vite build`, `outputDirectory: dist/public`, SPA rewrite). `.env.example` documents `VITE_API_URL`/`FRONTEND_ORIGINS`/`ALLOW_VERCEL_PREVIEWS`/`CROSS_SITE_COOKIES`.
+- **Verified:** `npx vite build` → `✓ built in 13.84s`, `dist/public/` emitted. `npm run check` still red but ONLY pre-existing errors (tracked 133-error tech debt) — none in touched files. Build command Vercel runs (esbuild/vite) does not type-check.
+- **Caveat flagged:** cross-site cookie (`SameSite=None`) is dropped by browsers blocking third-party cookies (Safari ITP, Brave, Chrome incognito / 3p-cookie phase-out) → login may 401. Robust fix later = shared parent domain (`app.` + `api.` same registrable domain → `SameSite=Lax`).
+- **Manual ops left to operator:** Vercel project Root Directory = `Vertex_Command-main` + `VITE_API_URL` env; deploy backend Docker to host + set its env; add Vercel origin to Google OAuth Authorized JS origins.
+- **Not committed** — code changes only; awaiting user.
+
 ## 2026-06-15 — Repo/disk cleanup (Tiers A + B + C)
 
 Inventory first: `.git` only 4.3 MB (repo NOT bloated); disk hogs were local/ignored (`node_modules` 707 MB, `attached_assets` 47 MB, `dist` 6.2 MB).

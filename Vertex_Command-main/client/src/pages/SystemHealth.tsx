@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { apiUrl } from "@/lib/apiBase";
 import { useTranslation } from "react-i18next";
 import { isRTL } from "@/i18n";
 import { motion } from "framer-motion";
@@ -88,7 +89,7 @@ function useSystemHealthStream(enabled: boolean) {
       eventSourceRef.current.close();
     }
 
-    const es = new EventSource("/api/v1/system/health/stream");
+    const es = new EventSource(apiUrl("/api/v1/system/health/stream"), { withCredentials: true });
     eventSourceRef.current = es;
 
     es.onopen = () => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTelemetryStore } from "@/stores/telemetryStore";
+import { apiUrl } from "@/lib/apiBase";
 
 const SSE_ENDPOINT = "/api/v1/trading/stream";
 const RECONNECT_DELAY_MS = 3000;
@@ -12,7 +13,7 @@ export function useTelemetryStream() {
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     const connect = () => {
-      const es = new EventSource(SSE_ENDPOINT);
+      const es = new EventSource(apiUrl(SSE_ENDPOINT), { withCredentials: true });
       eventSourceRef.current = es;
 
       es.onmessage = (event) => {

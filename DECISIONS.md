@@ -4,6 +4,14 @@ Decision log. Why things were chosen, what was rejected, whether final.
 
 ---
 
+## 2026-06-16 — Vercel = frontend only; backend stays on a long-lived host
+
+- **Decision:** Deploy the React SPA static to Vercel; run the Express+Postgres backend on a container host (Render/Railway/Fly). Frontend talks to backend cross-origin via `VITE_API_URL`.
+- **Why:** The backend is long-lived/stateful (broker WebSockets, SSE streams, background daemons, in-memory rate-limit/idempotency locks, PG sessions). Vercel's stateless serverless model cannot host it. The original `404: NOT_FOUND` was compounded by the Vercel root pointing at the git wrapper dir (app is in the `Vertex_Command-main/` subdir).
+- **Rejected:** (a) Whole app on Vercel — impossible (stateful). (b) Static-only demo on Vercel with no backend — UI loads but every API call fails; not useful. (c) Drop Vercel entirely for a single-origin host — viable and simpler (no client refactor) but user chose Vercel for the frontend.
+- **Cross-site cookie:** session cookie set `SameSite=None; Secure` (`CROSS_SITE_COOKIES=true`). Known fragility: browsers blocking third-party cookies drop it → 401. Accepted for now; robust fix deferred = shared parent domain (`app.x.com` + `api.x.com` → `SameSite=Lax`).
+- **Status:** Implemented (uncommitted on `feat/google-signin`); revisit cookie strategy if a custom domain is adopted.
+
 ## 2026-06-14 — Adopt file-based lifecycle protocol
 
 - **Decision:** Enforce 5-file lifecycle (README, STATUS, PROGRESS, DECISIONS, CLAUDE_MEMORY) as source of truth, per CLAUDE.md.
