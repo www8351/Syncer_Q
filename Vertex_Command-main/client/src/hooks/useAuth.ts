@@ -33,6 +33,17 @@ export function useAuth() {
     },
   });
 
+  const googleLoginMutation = useMutation({
+    mutationFn: async (data: { credential: string }) => {
+      const res = await apiRequest("POST", "/api/v1/auth/google", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      clearCsrfToken();
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/auth/me"] });
+    },
+  });
+
   const registerMutation = useMutation({
     mutationFn: async (data: { name: string; email: string; password: string; referralCode?: string; turnstileToken?: string }) => {
       const res = await apiRequest("POST", "/api/v1/auth/register", data);
@@ -68,6 +79,7 @@ export function useAuth() {
     isLoading,
     isAuthenticated: !!user,
     login: loginMutation,
+    googleLogin: googleLoginMutation,
     register: registerMutation,
     resendVerification: resendVerificationMutation,
     logout: logoutMutation,

@@ -35,6 +35,13 @@ const totpLib = {
   keyuri: async (account: string, issuer: string, secret: string) =>
     (await getOtpLib()).generateURI({ label: account, issuer, secret, strategy: "totp" }) as string,
 };
+let _googleClientPromise: Promise<any> | null = null;
+function getGoogleClient() {
+  if (!_googleClientPromise) {
+    _googleClientPromise = import("google-auth-library").then(m => new m.OAuth2Client(process.env.GOOGLE_CLIENT_ID));
+  }
+  return _googleClientPromise;
+}
 import { sendVerificationEmail, sendPasswordResetEmail } from "./gmail";
 import { resolveRules, computeAccountStatus, computeDrawdownInfo, computeTradingPriority, computeConsistencyFromTrades, computeAccountStatusFromTrades, computeAccountTradeStats } from "./rule-engine";
 import { registerIntegrationRoutes } from "./integrations-routes";
@@ -151,6 +158,12 @@ export async function registerRoutes(
     const secretKey = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY || "";
     const enabled = !!(siteKey && secretKey);
     res.json({ siteKey: enabled ? siteKey : "", enabled });
+  });
+
+  // ─── Google Sign-In Config ────────────────────────────
+  app.get("/api/v1/auth/google-config", (_req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    res.json({ clientId, enabled: !!clientId });
   });
 
   // ─── Auth ──────────────────────────────────────────
@@ -324,6 +337,111 @@ export async function registerRoutes(
       res.json({ id: user.id, name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl, onboardingCompleted: user.onboardingCompleted, isDemo: user.isDemo });
     } catch (err: any) {
       res.status(500).json({ message: "שגיאה בהתחברות" });
+    }
+  });
+
+  // ─── Google Sign-In (GIS ID-token flow) ───────────────
+  app.post("/api/v1/auth/google", async (req, res) => {
+    try {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      if (!clientId) return res.status(503).json({ message: "התחברות עם גוגל אינה זמינה" });
+
+      const credential = req.body.credential as string | undefined;
+      if (!credential || typeof credential !== "string") {
+        return res.status(400).json({ message: "חסר טוקן גוגל" });
+      }
+
+      const clientIp = getClientIp(req);
+
+      // Verify the ID token against Google's public keys (audience = our client id)
+      let payload: any;
+      try {
+        const client = await getGoogleClient();
+        const ticket = await client.verifyIdToken({ idToken: credential, audience: clientId });
+        payload = ticket.getPayload();
+      } catch {
+        await logSecurityEvent("login_failed", "warning", null, clientIp, { reason: "google_token_invalid" });
+        return res.status(401).json({ message: "אימות גוגל נכשל" });
+      }
+
+      if (!payload || !payload.sub || !payload.email) {
+        return res.status(401).json({ message: "אימות גוגל נכשל" });
+      }
+      if (payload.email_verified === false) {
+        return res.status(401).json({ message: "האימייל בגוגל אינו מאומת" });
+      }
+
+      const googleId = String(payload.sub);
+      const email = String(payload.email).toLowerCase();
+      const name = (payload.name as string) || email.split("@")[0];
+      const picture = (payload.picture as string) || null;
+
+      // 1) Match by googleId. 2) else by email → link. 3) else create new.
+      let user = await storage.getUserByGoogleId(googleId);
+      let isNew = false;
+
+      if (!user) {
+        const byEmail = await storage.getUserByEmail(email);
+        if (byEmail) {
+          user = (await storage.updateUser(byEmail.id, {
+            googleId,
+            avatarUrl: byEmail.avatarUrl || picture,
+            emailVerified: true,
+          })) || byEmail;
+        }
+      }
+
+      if (!user) {
+        const randomHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+        user = await storage.createUser({
+          name,
+          email,
+          passwordHash: randomHash,
+          role: "user",
+          emailVerified: true,
+          googleId,
+          avatarUrl: picture,
+          verificationToken: null,
+          verificationTokenExpiresAt: null,
+        });
+        isNew = true;
+
+        const freePlan = await storage.getPlanByKey("free");
+        if (freePlan) {
+          const trialEndsAt = new Date();
+          trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+          await storage.createSubscription({
+            userId: user.id,
+            planId: freePlan.id,
+            provider: "internal",
+            status: "trialing",
+            trialEndsAt,
+            amount: 0,
+            currency: "usd",
+            billingCycle: "monthly",
+          });
+        }
+        try {
+          await generateUniqueReferralCode(user.id);
+        } catch (codeErr: any) {
+          console.error("Failed to auto-create referral code:", codeErr.message);
+        }
+      }
+
+      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+        const remainingMinutes = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000);
+        return res.status(423).json({ message: "החשבון נעול עקב ניסיונות כושלים", lockedUntil: user.lockedUntil, remainingMinutes });
+      }
+
+      if (user.role === "admin") {
+        await ensureAdminDeskPlan(user.id);
+      }
+
+      req.session.userId = user.id;
+      await logSecurityEvent(isNew ? "register_success" : "login_success", "info", user.id, clientIp, { email, method: "google" });
+      res.json({ id: user.id, name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl, onboardingCompleted: user.onboardingCompleted, isDemo: user.isDemo });
+    } catch (err: any) {
+      res.status(500).json({ message: "שגיאה בהתחברות עם גוגל" });
     }
   });
 

@@ -6,7 +6,7 @@
   "scripts": {
     "dev:client": "vite dev --port 3003",
     "predev": "node scripts/migrate-ratelimit.cjs",
-    "dev": "cross-env NODE_ENV=development tsx server/index.ts",
+    "dev": "cross-env NODE_ENV=development tsx --env-file .env server/index.ts",
     "build": "tsx script/build.ts",
     "prestart": "node scripts/migrate-ratelimit.cjs",
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
@@ -74,6 +74,7 @@
     "express-session": "^1.19.0",
     "express-slow-down": "^3.1.0",
     "framer-motion": "^12.23.24",
+    "google-auth-library": "^9.15.1",
     "googleapis": "^148.0.0",
     "helmet": "^8.1.0",
     "i18next": "^25.8.18",

@@ -56,12 +56,14 @@ app.use(helmet({
         "https://js.stripe.com",
         "https://*.replit.com",
         "https://*.replit.dev",
+        "https://accounts.google.com/gsi/client",
         ...(isDev ? ["'unsafe-inline'", "'unsafe-eval'"] : []),
       ],
       styleSrc: [
         "'self'",
         "'unsafe-inline'",
         "https://fonts.googleapis.com",
+        "https://accounts.google.com/gsi/style",
       ],
       imgSrc: [
         "'self'",
@@ -71,6 +73,7 @@ app.use(helmet({
         "https://*.replit.com",
         "https://*.replit.dev",
         "https://*.stripe.com",
+        "https://*.googleusercontent.com",
       ],
       connectSrc: [
         "'self'",
@@ -78,6 +81,7 @@ app.use(helmet({
         "https://*.stripe.network",
         "https://*.replit.com",
         "https://*.replit.dev",
+        "https://accounts.google.com/gsi/",
         ...(isDev ? ["ws:", "wss:"] : []),
       ],
       frameSrc: [
@@ -86,6 +90,7 @@ app.use(helmet({
         "https://hooks.stripe.com",
         "https://checkout.stripe.com",
         "https://*.stripe.network",
+        "https://accounts.google.com/gsi/",
       ],
       fontSrc: [
         "'self'",

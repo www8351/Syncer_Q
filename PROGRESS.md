@@ -84,6 +84,13 @@ Once the workflow ran from the repo root for the first time, three pre-existing 
 - **Verified:** downloaded terraform 1.9.8; `terraform fmt -recursive -check` clean; `terraform init -backend=false` + `terraform validate` = "configuration is valid" for BOTH root and bootstrap. **Not applied** (billable AWS resources — user runs apply per README).
 - **Not done (later steps):** AWS Global Accelerator + 443 lockdown; engine app-wiring (Redis/secrets/run); custom VPC.
 
+## 2026-06-16 — PR #2 merged to main (Step 2 AWS infra + cleanup)
+
+- **Action:** User approved merge. Pre-merge check: `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. Checks green — `Static Analysis & Audit`=success, `Docker Build Validation`=success; `Deploy to VPS`=skipped, `Supabase Preview`=skipped. Merged via merge commit `b2d3ddc` (base `main` ← `claude/aws-terraform-step2`). +720 / −1789.
+- **Content:** `infra/terraform/` (ECR + 3 ARM64 Graviton EC2 across us-east-1/eu-central-1/ap-northeast-1, IAM ECR-readonly, per-region SG, S3+DynamoDB state, IMDSv2); ARM64-capable Dockerfile + `build-push.sh`; repo cleanup (`python_fixes/`, `_bmad/`, stale docs, `attached_assets` 47M→3.1M).
+- **Safety:** Terraform NOT applied (billable). No app logic changed; secrets untouched.
+- **Next:** operator runs `terraform apply` per `infra/terraform/README.md`; later steps — Global Accelerator + 443 lockdown, engine app-wiring.
+
 ## 2026-06-15 — Repo/disk cleanup (Tiers A + B + C)
 
 Inventory first: `.git` only 4.3 MB (repo NOT bloated); disk hogs were local/ignored (`node_modules` 707 MB, `attached_assets` 47 MB, `dist` 6.2 MB).

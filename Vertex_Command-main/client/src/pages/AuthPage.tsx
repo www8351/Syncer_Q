@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ export default function AuthPage() {
     setTurnstileResetKey(k => k + 1);
   }, []);
 
-  const { login, register, resendVerification } = useAuth();
+  const { login, googleLogin, register, resendVerification } = useAuth();
 
   const { data: turnstileConfig } = useQuery({
     queryKey: ["/api/v1/auth/turnstile-config"],
@@ -51,6 +51,67 @@ export default function AuthPage() {
     },
     staleTime: Infinity,
   });
+
+  const { data: googleConfig } = useQuery({
+    queryKey: ["/api/v1/auth/google-config"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/auth/google-config");
+      return res.json() as Promise<{ clientId: string; enabled: boolean }>;
+    },
+    staleTime: Infinity,
+  });
+
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
+  const [gsiReady, setGsiReady] = useState(false);
+
+  const handleGoogleCredential = useCallback(async (response: { credential?: string }) => {
+    if (!response?.credential) return;
+    setError('');
+    try {
+      await googleLogin.mutateAsync({ credential: response.credential });
+    } catch (err: any) {
+      try {
+        const text = err.message.includes('{') ? err.message.slice(err.message.indexOf('{')) : err.message;
+        const parsed = JSON.parse(text);
+        setError(parsed.message || t('auth.googleError'));
+      } catch {
+        setError(t('auth.googleError'));
+      }
+    }
+  }, [googleLogin, t]);
+
+  // Load Google Identity Services script once, when Google sign-in is configured
+  useEffect(() => {
+    if (!googleConfig?.enabled || !googleConfig.clientId) return;
+    if ((window as any).google?.accounts?.id) { setGsiReady(true); return; }
+    if (document.getElementById('google-gsi-script')) return;
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.id = 'google-gsi-script';
+    s.onload = () => setGsiReady(true);
+    document.head.appendChild(s);
+  }, [googleConfig?.enabled, googleConfig?.clientId]);
+
+  // Initialize + render the Google button on the login/register view
+  useEffect(() => {
+    if (!gsiReady || !googleConfig?.clientId) return;
+    if (requires2fa || verificationSent || mode === 'forgot' || mode === 'reset') return;
+    const g = (window as any).google;
+    if (!g?.accounts?.id || !googleBtnRef.current) return;
+    g.accounts.id.initialize({ client_id: googleConfig.clientId, callback: handleGoogleCredential });
+    googleBtnRef.current.innerHTML = '';
+    g.accounts.id.renderButton(googleBtnRef.current, {
+      theme: 'filled_black',
+      size: 'large',
+      width: 320,
+      text: 'continue_with',
+      shape: 'rectangular',
+      logo_alignment: 'center',
+      locale: i18n.language,
+    });
+  }, [gsiReady, googleConfig?.clientId, mode, requires2fa, verificationSent, handleGoogleCredential, i18n.language]);
 
   const turnstileEnabled = turnstileConfig?.enabled ?? false;
   const turnstileSiteKey = turnstileConfig?.siteKey ?? "";
@@ -591,6 +652,17 @@ export default function AuthPage() {
               </button>
             )}
           </form>
+
+          {googleConfig?.enabled && (
+            <>
+              <div className="flex items-center gap-3 my-4">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">{t('auth.orContinueWith')}</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <div className="flex justify-center" ref={googleBtnRef} data-testid="google-signin" />
+            </>
+          )}
 
         </div>
       </div>
