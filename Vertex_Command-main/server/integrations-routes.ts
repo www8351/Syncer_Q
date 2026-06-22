@@ -918,8 +918,11 @@ export function registerIntegrationRoutes(app: Express) {
 
       const existingConnections = await storage.getConnectionsByUser(userId);
       const existingAccounts = await storage.getAccountsByUser(userId);
-      const ADMIN_EMAILS = ["yosefrabitrade@gmail.com", "www8351@gmail.com"];
-      const isAdmin = ADMIN_EMAILS.includes(user.email);
+      const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isAdmin = ADMIN_EMAILS.includes(user.email.toLowerCase());
 
       const protocol = req.headers["x-forwarded-proto"] || "https";
       const host = req.headers["x-forwarded-host"] || req.headers.host || "";

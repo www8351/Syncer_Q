@@ -4,7 +4,7 @@ import { plans, subscriptions } from "../shared/billing-schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
-const DEMO_PASSWORD = "User12345678!";
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "DemoUser123!";
 
 const DEMO_USERS = [
   { name: "Demo Free",      email: "userfree1@demo.vertex",  planKey: "free" },
