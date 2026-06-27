@@ -3,9 +3,9 @@ import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
-const ADMIN_EMAIL = "www8351@gmail.com";
-const ADMIN_NAME = "Admin";
-const ADMIN_PASSWORD = "refael100A!";
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
+const ADMIN_NAME = process.env.SEED_ADMIN_NAME ?? "Admin";
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
 
 async function seedAdmin() {
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
