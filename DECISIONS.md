@@ -4,6 +4,28 @@ Decision log. Why things were chosen, what was rejected, whether final.
 
 ---
 
+## 2026-06-28 — Keep the existing Vercel/Vite config; treat blank-screen as dashboard-level
+
+- **Decision:** Do **not** rewrite `vercel.json`, `vite.config.ts`, or `apiBase.ts` to "fix" the blank/404. They were verified correct (SPA rewrite present, `outputDirectory dist/public` matches Vite's `outDir`, no `base` ⇒ `/`, `apiUrl()` env-driven with no hardcoded host). Attribute the runtime failure to **Vercel dashboard/infra state** — primarily `VITE_API_URL` being unset (and the VPS backend reachable over HTTPS) — and document those as operator steps.
+- **Why:** A build that reports Success but serves blank means the bundle compiled fine; the failure is at runtime/config. Rewriting a correct SPA config risks regressing a working setup and cannot set a dashboard env var. The single env-baked-at-build-time variable (`VITE_API_URL`) is the highest-probability cause.
+- **Rejected:** (a) Blind rewrite of `vercel.json`/`vite.config.ts` per the literal task — regression risk, no effect on a dashboard cause. (b) Hardcoding the backend origin into the client — violates 12-Factor and the existing `apiUrl()` design. (c) Adding an SPA `base` path — would *break* asset resolution for a root-domain deploy, not fix it.
+- **Status:** Final for this session. Revisit only if, after `VITE_API_URL` is set and the backend is HTTPS-reachable, the site still fails.
+
+## 2026-06-28 — Remove the global error-swallowing trap from `client/index.html`
+
+- **Decision:** Delete the inline `<script>` debug trap that made `window.onerror` and the `error`/`unhandledrejection` listeners `return true` / `preventDefault()` for all errors. Retain only a narrow ResizeObserver-noise suppressor. Also repoint `og:image`/`twitter:image` off `replit.com`.
+- **Why:** The trap suppressed every runtime error (only `console.warn`-logging them), so any crash-on-mount in production rendered a **silent blank screen** with no surfaced error — directly masking the failure under investigation. Removing it lets the browser console + React error overlay surface real faults in prod.
+- **Rejected:** Keep the trap as a diagnostic (it hides more than it reveals — suppression outweighs its logging); rewrite it to log-without-suppress (unnecessary complexity for leftover debug instrumentation).
+- **Status:** Final.
+
+## 2026-06-28 — Branch consolidation is prune-only (all 4 already merged)
+
+- **Decision:** Collapse to a single `main` by **deleting** the 4 extra branches, not merging them. Delete locally (`git branch -d`) and on origin (`git push origin --delete`), then `git remote prune origin`.
+- **Why:** `git branch --merged main` + empty `git diff main...<branch>` proved all four (`feat/google-signin`, `feat/vercel-vps-split`, `vercel/vercel-web-analytics-integrati-e5zi0k`, remote-only `claude/secure-portfolio-repo-wkzhag`) are linear ancestors of `main` — zero unique commits. Task B's "sequential merge + manual conflict resolution" had nothing to merge and no possible conflict.
+- **Rejected:** Running `git merge` per branch anyway (no-op merge commits / clutter); local-only deletion (leaves the 4 stale refs on GitHub, contradicting "single canonical branch" — the task explicitly requested remote deletion too).
+- **Risk noted:** remote branch deletion is irreversible on GitHub; executed under explicit, repeated task instruction and approved plan.
+- **Status:** Final.
+
 ## 2026-06-16 — PIVOT: abandon AWS multi-region; hybrid Vercel SPA + single VPS
 
 - **Decision:** Permanently abandon the AWS multi-region Terraform architecture. New target: **frontend SPA on Vercel** (`https://syncer-q.vercel.app`) + **backend on a single standard VPS** via Docker Compose, reached cross-origin. Branch: `feat/vercel-vps-split` (monorepo retained; Vercel uses Root Directory = nested `Vertex_Command-main/`).

@@ -1,14 +1,24 @@
 # STATUS
 
-_Last updated: 2026-06-16_
+_Last updated: 2026-06-28_
 
 ## Where the project stands
 
-**Active (uncommitted) on `feat/vercel-vps-split`:** Architecture pivoted — **AWS multi-region Terraform permanently abandoned**. New target: SPA → **Vercel** (`https://syncer-q.vercel.app`), backend → **single VPS** Docker Compose, cross-origin. Did the surgical cleanup + completed the unfinished frontend wiring. `npx vite build` passes (exit 0). Not committed. See PROGRESS/DECISIONS 2026-06-16 (pivot).
+**Single canonical branch `main`; repo consolidated.** The hybrid architecture (SPA → **Vercel** `https://syncer-q.vercel.app`, backend → **single VPS** Docker Compose, cross-origin via `VITE_API_URL`) is fully committed on `main`. This session: diagnosed the "build Success but blank screen / 404" Vercel report, **verified the repo-level Vercel config is already correct** (no rewrite needed), hardened `client/index.html`, ran a clean production build, and pruned all 4 stale branches (local + remote) down to `main`.
 
-History: Step 2 (AWS Terraform) was merged via PR #2 (`b2d3ddc`) but is now **dead/deleted** by this pivot. Step 1 containerization merged via PR #1 (`4561dac`, 2026-06-14).
+**Root cause of the blank/404 runtime is Vercel dashboard/infra state, not repo code** — `VITE_API_URL` must be set in the Vercel project and the VPS backend must be reachable over HTTPS. These are operator steps (see Next best action); no repo change can substitute for them.
 
-## Done (this session — the pivot)
+History: AWS Terraform (PR #2 `b2d3ddc`) **dead/deleted** by the 2026-06-16 pivot. Containerization merged via PR #1 (`4561dac`, 2026-06-14).
+
+## Done (this session — 2026-06-28, Vercel runtime + branch consolidation)
+
+- **Diagnosed the blank-screen / 404.** Read the actual config: `Vertex_Command-main/vercel.json` (framework vite, `buildCommand npx vite build`, `outputDirectory dist/public`, SPA rewrite `/(.*)→/index.html`), `vite.config.ts` (`root client`, `outDir dist/public`, no `base` ⇒ `/`, replit plugins dev-gated), `client/src/lib/apiBase.ts` (`apiUrl()` reads `VITE_API_URL`, strips trailing slash, no hardcoded host). **All correct.** A rewrite was rejected (would risk regressing a working SPA config; can't fix a dashboard-level cause).
+- **Hardened `client/index.html`** (the one real code fix): removed a debug global error trap (`window.onerror`/`unhandledrejection` returned `true` + `preventDefault`) that **swallowed every runtime error** → a crash-on-mount would fail silently to a blank screen. Kept only a benign ResizeObserver-noise suppressor. Repointed `og:image`/`twitter:image` off `replit.com` to `https://syncer-q.vercel.app/opengraph.jpg`; dropped the `@replit` `twitter:site`.
+- **Pinned Node** in `Vertex_Command-main/package.json`: `"engines": { "node": ">=20.19" }` (Vite 7 floor).
+- **Local build verified — exit 0.** First run failed (`@vercel/analytics/react` unresolved) because local `node_modules` was stale; `npm install` synced it, then `npx vite build` → `✓ built in 14s`, `dist/public/index.html` + hashed `assets/*` emitted. Served the bundle via `vite preview`: `/`=200, deep link `/dashboard`=200 (SPA fallback works), JS asset=200; served HTML carries `<div id="root">` and **no** TRAP/replit refs.
+- **Branch consolidation — prune only.** All 4 branches were already fully merged into `main` (zero unique commits, zero file diffs) → no merges, no conflicts. Deleted 3 local (`feat/google-signin`, `feat/vercel-vps-split`, `vercel/vercel-web-analytics-integrati-e5zi0k`) via `git branch -d`, and all 4 on origin (those 3 + remote-only `claude/secure-portfolio-repo-wkzhag`) via `git push origin --delete`, then `git remote prune origin`. Final: only `main` + `origin/main`.
+
+## Done (earlier — the pivot, 2026-06-16)
 
 - **Deleted AWS/microservices/monitoring IaC** (`git rm`): `infra/terraform/` (all), `infra/backend-go/`, `infra/frontend/`, `infra/nodejs-api/`, `infra/nginx/`, `infra/prometheus/`, `infra/grafana/`, `infra/docker-compose.microservices.yml`, `infra/MIGRATION_CHECKLIST.md`, `infra/README.md`. `infra/` now holds only `vps/` (provision.sh + deploy.sh, kept — single-host reusable).
 - **Compose trimmed to 5 services** (`postgres + vertex-app + analytics + ingress + certbot`); dropped prometheus/grafana + their volumes; `nginx.conf` `/grafana/` routes removed; `deploy.sh` health list trimmed. Nginx+Certbot kept (HTTPS → `Secure` cookie).
@@ -39,11 +49,17 @@ History: Step 2 (AWS Terraform) was merged via PR #2 (`b2d3ddc`) but is now **de
 
 ## Next best action
 
-- **Commit** the pivot on `feat/vercel-vps-split`, open PR. **Vercel:** create project, Root Directory = `Vertex_Command-main`, set `VITE_API_URL=https://<vps-backend-host>`. **VPS:** provision (`infra/vps/provision.sh`), set `.env` (incl. `FRONTEND_ORIGINS=https://syncer-q.vercel.app`, `CROSS_SITE_COOKIES=true`, `VERTEX_DOMAIN`, `CERTBOT_EMAIL`, `GOOGLE_CLIENT_ID`), then enable deploy (`vars.DEPLOY_ENABLED=true`, `workflow_dispatch`). **Google Cloud Console:** add `https://syncer-q.vercel.app` to Authorized JavaScript origins. Separately: chip at the 133 `tsc` errors, then restore the hard type gate.
+**The blank screen will persist until these operator steps are done — they are NOT repo-fixable:**
+1. **Vercel → Settings → Environment Variables:** set `VITE_API_URL=https://<vps-backend-host>` (Production scope), then redeploy so the value is baked into the client bundle. Without it, `API_BASE=""` and API calls hit `syncer-q.vercel.app/api/*` (no backend) → app stalls on first auth fetch.
+2. **Vercel → Settings → Root Directory = `Vertex_Command-main`** (confirm; a wrong root would fail the build, so it is likely already set).
+3. **VPS:** provision (`infra/vps/provision.sh`), set `.env` incl. `FRONTEND_ORIGINS=https://syncer-q.vercel.app`, `CROSS_SITE_COOKIES=true`, `VERTEX_DOMAIN`, `CERTBOT_EMAIL`, `GOOGLE_CLIENT_ID`; backend must serve **HTTPS** (Secure cross-site cookie). Enable deploy (`vars.DEPLOY_ENABLED=true`, `workflow_dispatch`).
+4. **Google Cloud Console:** add `https://syncer-q.vercel.app` to Authorized JavaScript origins.
+5. Separately: chip at the 133 `tsc` errors, then restore the hard type gate.
 
 ## Blockers / Waiting
 
-- None blocking the PR. Deploy intentionally disabled until VPS is provisioned (`DEPLOY_ENABLED` unset).
+- **Live site stays blank until `VITE_API_URL` is set in Vercel + the VPS backend is reachable over HTTPS** (operator actions; cannot be done from the repo).
+- Deploy intentionally disabled until VPS is provisioned (`DEPLOY_ENABLED` unset).
 
 ## Needs review
 

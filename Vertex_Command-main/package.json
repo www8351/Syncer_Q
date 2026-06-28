@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev:client": "vite dev --port 3003",
     "predev": "node scripts/migrate-ratelimit.cjs",
