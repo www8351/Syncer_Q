@@ -6,11 +6,24 @@ _Last updated: 2026-06-28_
 
 **Single canonical branch `main`; repo consolidated.** The hybrid architecture (SPA → **Vercel** `https://syncer-q.vercel.app`, backend → **single VPS** Docker Compose, cross-origin via `VITE_API_URL`) is fully committed on `main`. This session: diagnosed the "build Success but blank screen / 404" Vercel report, **verified the repo-level Vercel config is already correct** (no rewrite needed), hardened `client/index.html`, ran a clean production build, and pruned all 4 stale branches (local + remote) down to `main`.
 
-**Root cause of the blank/404 runtime is Vercel dashboard/infra state, not repo code** — `VITE_API_URL` must be set in the Vercel project and the VPS backend must be reachable over HTTPS. These are operator steps (see Next best action); no repo change can substitute for them.
+**PRODUCTION 404 RESOLVED (2026-06-28).** `syncer-q.vercel.app` was returning `X-Vercel-Error: NOT_FOUND` on **every** path — Vercel was building the **repo root** (no app/`vercel.json` there) instead of the `Vertex_Command-main/` subdir, shipping an empty deploy. Fixed by committing a **repo-root `vercel.json`** that builds the subdir (`b1c6ba9`, pushed to `main`) + user setting dashboard **Root Directory = `Vertex_Command-main`**. **Verified live: `/` and `/dashboard` → 200**, app shell + hashed assets served.
+
+> **Supersedes the earlier "blank screen = `VITE_API_URL` / dashboard state" claim** — that root-cause attribution was wrong (the site was 404 with the bundle never loading, not a blank page from failed API calls). `VITE_API_URL` → reachable **HTTPS backend** is still required for in-app data/auth calls, but it is a **later layer**, not the cause of the outage.
 
 History: AWS Terraform (PR #2 `b2d3ddc`) **dead/deleted** by the 2026-06-16 pivot. Containerization merged via PR #1 (`4561dac`, 2026-06-14).
 
-## Done (this session — 2026-06-28, Vercel runtime + branch consolidation)
+**Backend host now concrete: single AWS EC2 + Elastic IP** (the pivot's "single VPS" made real — NOT a Terraform revival). A 4-phase provisioning/deploy guide for the Copy Trading Execution Engine was produced this session (advisory; nothing provisioned). See DECISIONS (2026-06-28 — EC2 execution-engine host) + PROGRESS.
+
+## Done (this session — 2026-06-28, AWS EC2 execution-engine provisioning guide)
+
+- **Delivered a cut-and-pasteable 4-phase guide** to host the Copy Trading Execution Engine on a hardened EC2 box, aligned to real repo facts (app `:5000`, build → `dist/index.cjs`, `node dist/index.cjs`, Node `>=20.19`, `/healthz`, existing `server/signal-routes.ts` HMAC scheme):
+  - **Phase 1 (AWS CLI):** `copy-trading-sg` (SSH 22 ← admin IP only, 80, 443; 5000 never opened); t3.medium Ubuntu 22.04 + 30 GB gp3 encrypted, IMDSv2-required, T3-unlimited; allocate + associate **Elastic IP** (stable egress for broker whitelisting).
+  - **Phase 2 (`bootstrap.sh`):** apt upgrade; unprivileged `deployer` user; Node 20 (NodeSource); Docker Engine + Compose plugin; PM2; UFW deny-in / allow 22+80+443; fail2ban; unattended-upgrades; post-verify SSH lockdown.
+  - **Phase 3:** Path A — multi-stage Dockerfile (non-root uid 1001 + tini) + `docker-compose.yml` (`env_file` 600, `restart: always`, json-file 10m×5, 65536 nofile, Caddy auto-TLS). Path B — `ecosystem.config.cjs` **fork/instances:1** + `node --env-file=.env` + pm2-logrotate.
+  - **Phase 4:** bare repo + `post-receive` hook (`git push production main`); Vercel→AWS HMAC reusing the existing verifier (Vercel-side signer provided); reboot via Docker `restart:always` / `pm2 startup` / hardened systemd unit.
+- **Recommended Path A (Docker + Caddy)** as primary; systemd unit over pm2-startup for Path B.
+
+## Done (earlier this session — 2026-06-28, Vercel runtime + branch consolidation)
 
 - **Diagnosed the blank-screen / 404.** Read the actual config: `Vertex_Command-main/vercel.json` (framework vite, `buildCommand npx vite build`, `outputDirectory dist/public`, SPA rewrite `/(.*)→/index.html`), `vite.config.ts` (`root client`, `outDir dist/public`, no `base` ⇒ `/`, replit plugins dev-gated), `client/src/lib/apiBase.ts` (`apiUrl()` reads `VITE_API_URL`, strips trailing slash, no hardcoded host). **All correct.** A rewrite was rejected (would risk regressing a working SPA config; can't fix a dashboard-level cause).
 - **Hardened `client/index.html`** (the one real code fix): removed a debug global error trap (`window.onerror`/`unhandledrejection` returned `true` + `preventDefault`) that **swallowed every runtime error** → a crash-on-mount would fail silently to a blank screen. Kept only a benign ResizeObserver-noise suppressor. Repointed `og:image`/`twitter:image` off `replit.com` to `https://syncer-q.vercel.app/opengraph.jpg`; dropped the `@replit` `twitter:site`.
@@ -49,16 +62,17 @@ History: AWS Terraform (PR #2 `b2d3ddc`) **dead/deleted** by the 2026-06-16 pivo
 
 ## Next best action
 
-**The blank screen will persist until these operator steps are done — they are NOT repo-fixable:**
-1. **Vercel → Settings → Environment Variables:** set `VITE_API_URL=https://<vps-backend-host>` (Production scope), then redeploy so the value is baked into the client bundle. Without it, `API_BASE=""` and API calls hit `syncer-q.vercel.app/api/*` (no backend) → app stalls on first auth fetch.
-2. **Vercel → Settings → Root Directory = `Vertex_Command-main`** (confirm; a wrong root would fail the build, so it is likely already set).
+**The 404 outage is fixed (site serves 200). Remaining steps wire up the backend so in-app data/auth calls work:**
+0. ✅ **DONE — Vercel 404 fixed.** Root-root `vercel.json` (`b1c6ba9`) builds the subdir; dashboard **Root Directory = `Vertex_Command-main`** set in parallel. Verified `/` + `/dashboard` → 200.
+1. **Vercel → Settings → Environment Variables:** set `VITE_API_URL=https://<vps-backend-host>` (Production scope), then redeploy so the value is baked into the client bundle. Without it, `API_BASE=""` and API calls hit `syncer-q.vercel.app/api/*` (no backend) → **shell loads but data/auth calls fail** (this is the next thing the user will notice now that the 404 is gone).
 3. **VPS:** provision (`infra/vps/provision.sh`), set `.env` incl. `FRONTEND_ORIGINS=https://syncer-q.vercel.app`, `CROSS_SITE_COOKIES=true`, `VERTEX_DOMAIN`, `CERTBOT_EMAIL`, `GOOGLE_CLIENT_ID`; backend must serve **HTTPS** (Secure cross-site cookie). Enable deploy (`vars.DEPLOY_ENABLED=true`, `workflow_dispatch`).
 4. **Google Cloud Console:** add `https://syncer-q.vercel.app` to Authorized JavaScript origins.
-5. Separately: chip at the 133 `tsc` errors, then restore the hard type gate.
+5. **Provision the EC2 execution engine** (Phase 1→4 guide, 2026-06-28): create `copy-trading-sg` + instance + **Elastic IP**, run `bootstrap.sh`, deploy via `git push production main`. Then: **whitelist the Elastic IP at Tradovate + Topstep**, set `SIGNAL_WEBHOOK_SECRET` **identically** in Vercel env + VPS `.env`, point `VITE_API_URL`/`engine.<domain>` DNS A record at the EIP. (Decision: EC2 = the single-VPS host; not a Terraform revival.)
+6. Separately: chip at the 133 `tsc` errors, then restore the hard type gate.
 
 ## Blockers / Waiting
 
-- **Live site stays blank until `VITE_API_URL` is set in Vercel + the VPS backend is reachable over HTTPS** (operator actions; cannot be done from the repo).
+- **404 outage cleared** (site serves 200). **In-app data/auth calls stay broken until `VITE_API_URL` is set in Vercel + the VPS/EC2 backend is reachable over HTTPS** (operator actions).
 - Deploy intentionally disabled until VPS is provisioned (`DEPLOY_ENABLED` unset).
 
 ## Needs review
