@@ -54,7 +54,16 @@ History: AWS Terraform (PR #2 `b2d3ddc`) **dead/deleted** by the 2026-06-16 pivo
   - `deploy` gated behind `workflow_dispatch` + `vars.DEPLOY_ENABLED=='true'` (+ job-level `production-deploy` concurrency, `production` environment). A merge to main does NOT deploy. Verified: deploy `skipped` in every run, never executed.
   - Three latent blockers fixed en route (all surfaced only once the workflow actually ran): `environment.url` `secrets`→`vars` (startup_failure); `client/src/lib/` un-ignored + 2 source files committed (Vite build); `attached_assets/.gitkeep` placeholder so the Dockerfile COPY works without a 47 MB commit.
 
+## Done (this session — 2026-06-28, AWS CLI MCP server wired into Claude Code)
+
+- **Registered the official AWS-CLI MCP server** (`awslabs.aws-api-mcp-server`, image `public.ecr.aws/awslabs-mcp/awslabs/aws-api-mcp-server:latest`) in Claude Code **local scope** (`~/.claude.json`, project-bound — kept out of the public-mirror repo). Region `us-west-2`, `REQUIRE_MUTATION_CONSENT=true`, creds bind-mounted read-only from `~/.aws`. See DECISIONS (2026-06-28 — AWS access via official MCP) + PROGRESS.
+- **Not connected yet** — `claude mcp list` → `aws-api-mcp-server` **✘ Failed to connect**, by design: Docker Desktop engine is down + `~/.aws` is empty. Config itself is correct.
+
 ## Open / In progress
+
+- **AWS MCP server registered, NOT connected.** Unblock with 3 operator steps (Docker start + creds + restart) below, then validate.
+
+## Open / In progress (pre-existing)
 
 - **Step 2 — AWS multi-region Terraform: DELETED by the 2026-06-16 pivot** (was merged via PR #2 `b2d3ddc`, never applied — billable). All of `infra/terraform/` + `infra/backend-go/` removed. No AWS resources were ever created, so nothing to tear down.
 - PR #1 (containerization) merged to main (`4561dac`); branch deleted.
@@ -72,6 +81,7 @@ History: AWS Terraform (PR #2 `b2d3ddc`) **dead/deleted** by the 2026-06-16 pivo
 
 ## Blockers / Waiting
 
+- **AWS MCP server — 3 operator steps to connect** (registered but `Failed to connect`): (1) **start Docker Desktop** (engine `desktop-linux` is down); (2) create `~/.aws/credentials` (`[default]` + Root/Admin `aws_access_key_id`/`aws_secret_access_key`) and `~/.aws/config` (`region = us-west-2`, `output = json`); (3) **restart Claude Code** so the server spawns. Then validate: `claude mcp list` → connected, then `aws sts get-caller-identity --output json` + `aws configure get region`.
 - **404 outage cleared** (site serves 200). **In-app data/auth calls stay broken until `VITE_API_URL` is set in Vercel + the VPS/EC2 backend is reachable over HTTPS** (operator actions).
 - Deploy intentionally disabled until VPS is provisioned (`DEPLOY_ENABLED` unset).
 

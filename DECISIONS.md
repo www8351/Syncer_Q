@@ -4,6 +4,16 @@ Decision log. Why things were chosen, what was rejected, whether final.
 
 ---
 
+## 2026-06-28 — AWS access via official `awslabs.aws-api-mcp-server` MCP (Docker, local scope)
+
+- **Decision:** Give the agent AWS-CLI capability through the **official AWS Labs MCP server** `public.ecr.aws/awslabs-mcp/awslabs/aws-api-mcp-server:latest`, registered in Claude Code at **`local` scope** (`~/.claude.json`, project-bound) via `claude mcp add aws-api-mcp-server`. Region `us-west-2`, `AWS_API_MCP_PROFILE_NAME=default`, `REQUIRE_MUTATION_CONSENT=true`; creds bind-mounted **read-only** from `~/.aws` → `/app/.aws:ro`. The "AWS Solutions Architect" role prompt assumed this server was already connected; it was not (no AWS MCP, no local `aws` binary, no `~/.aws`).
+- **Why this image:** it wraps + **validates** AWS CLI commands (no arbitrary code exec), runs containerized (filesystem/process isolation), and is the canonical AWS-maintained server. The bare `public.ecr.aws/aws-cli/aws-cli:latest` image was **rejected** — it is only the CLI, not an MCP server.
+- **Why `local` scope (not project `.mcp.json`/committed settings):** this repo is a **public mirror** ("scrub personal data"). A committed MCP config could leak local paths/intent and risks creds ending up in version control. Local scope keeps the config out of the repo; creds are mounted, never baked into config or image.
+- **Safety (two layers):** server-side `REQUIRE_MUTATION_CONSENT=true` (reads free; create/modify/delete gated) **plus** Claude Code's own per-tool-call permission prompt. Fallback if the client can't surface the consent elicitation: re-register with `REQUIRE_MUTATION_CONSENT=false` (rely on Claude Code prompts) or lock down with `READ_OPERATIONS_ONLY=true`.
+- **Not a revival of the dead AWS stack:** this is **operator tooling** (CLI access from the agent), not a return to `infra/terraform/` / multi-region (deleted 2026-06-16). Orthogonal to the EC2 execution-engine decision.
+- **Rejected:** bare `aws-cli` image (not an MCP server); installing a local `aws` binary + driving via Bash (loses Docker isolation); committing the config to the repo (public-mirror leak risk).
+- **Status:** **Registered; not yet connected.** Blocked on (1) Docker Desktop engine being started and (2) `~/.aws/credentials` being created with Root/Admin keys, then a Claude Code restart. Validate via `claude mcp list` → connected + `aws sts get-caller-identity`.
+
 ## 2026-06-28 — Repo-root `vercel.json` to build the app subdir (production was 404 everywhere)
 
 - **Decision:** Add a **second `vercel.json` at the repo root** that drives the nested build (`cd Vertex_Command-main && npm install` / `npx vite build`, `outputDirectory: Vertex_Command-main/dist/public`, `framework: null`, SPA rewrite `/(.*) → /index.html`). Commit `b1c6ba9`. Belt-and-suspenders with the dashboard **Root Directory = `Vertex_Command-main`** setting (user applied both).
