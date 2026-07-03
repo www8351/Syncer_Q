@@ -5,6 +5,7 @@
 ### Professional Prop-Trading Command Center
 
 *Manage dozens of funded trading accounts across multiple prop firms — with live broker streaming, automated risk enforcement, copy trading, and a full trading journal.*
+*ניהול עשרות חשבונות מסחר במימון פרופ-פירם — עם סטרימינג ברוקר חי, אכיפת סיכון אוטומטית, העתקת מסחר ויומן מסחר מלא.*
 
 [![Node](https://img.shields.io/badge/Node-24.x-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -18,15 +19,56 @@
 
 ---
 
-## 📖 Overview
+## 🌍 Overview · סקירה
 
-**Vertex Command** is a full-stack SaaS platform built for serious prop-firm traders who juggle many funded accounts at once. It connects directly to **Tradovate**, **TopstepX (ProjectX)**, and **Rithmic**, streams live positions and equity, and automatically enforces drawdown rules — flattening accounts at market the moment a breach is detected.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-On top of execution it ships a complete **trading journal**, a **Pandas-powered analytics engine**, **copy trading** with risk-managed fan-out, **TradingView signal ingestion**, **Stripe billing**, and a hybrid deploy: **SPA on Vercel + hardened backend on a single VPS** (Nginx WAF + TLS, GitHub Actions CI/CD).
+### 🇬🇧 English
 
-The UI is **multi-language** (Hebrew default with full RTL, plus English, Arabic, Spanish).
+**Vertex Command** is a full-stack SaaS platform built for serious prop-firm
+traders who juggle many funded accounts at once. It connects directly to
+**Tradovate**, **TopstepX (ProjectX)**, and **Rithmic**, streams live positions
+and equity, and automatically enforces drawdown rules — flattening accounts at
+market the moment a breach is detected.
 
-> **Tagline:** *Your accounts, one cockpit. Risk enforced before you can blink.*
+On top of execution it ships a complete **trading journal**, a **Pandas-powered
+analytics engine**, **copy trading** with risk-managed fan-out, **TradingView
+signal ingestion**, **Stripe billing**, and a hybrid deploy: **SPA on Vercel +
+hardened backend on a single VPS** (Nginx WAF + TLS, GitHub Actions CI/CD).
+
+The UI is **multi-language** (Hebrew default with full RTL, plus English,
+Arabic, Spanish).
+
+> *Your accounts, one cockpit. Risk enforced before you can blink.*
+
+</td>
+<td width="50%" valign="top">
+
+<div dir="rtl">
+
+### 🇮🇱 עברית
+
+**Vertex Command** היא פלטפורמת SaaS פ‏ול-סטאק לסוחרי פרופ-פירם רציניים המנהלים
+חשבונות מומנים רבים בו-זמנית. מתחברת ישירות ל-**Tradovate**, **TopstepX
+(ProjectX)** ו-**Rithmic**, מזרימה פוזיציות והון בזמן אמת, ואוכפת אוטומטית
+כללי drawdown — סוגרת חשבונות בשוק ברגע שמזוהה חריגה.
+
+מעבר לביצוע, הפלטפורמה כוללת **יומן מסחר** מלא, **מנוע אנליטיקה** מבוסס
+Pandas, **העתקת מסחר** עם פיזור מבוקר-סיכון, **קליטת אותות TradingView**,
+**חיוב Stripe**, ופריסה היברידית: **SPA ב-Vercel + backend מוקשח על VPS
+בודד** (Nginx WAF + TLS, CI/CD ב-GitHub Actions).
+
+הממשק **רב-לשוני** (עברית כברירת מחדל עם RTL מלא, ובנוסף אנגלית, ערבית וספרדית).
+
+> *חשבונות שלך, קוקפיט אחד. סיכון נאכף לפני שתספיק למצמץ.*
+
+</div>
+
+</td>
+</tr>
+</table>
 
 ---
 
