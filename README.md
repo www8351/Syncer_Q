@@ -4,8 +4,8 @@
 
 ### Professional Prop-Trading Command Center
 
-*Manage dozens of funded trading accounts across multiple prop firms — with live broker streaming, automated risk enforcement, copy trading, and a full trading journal.*
-*ניהול עשרות חשבונות מסחר במימון פרופ-פירם — עם סטרימינג ברוקר חי, אכיפת סיכון אוטומטית, העתקת מסחר ויומן מסחר מלא.*
+*Manage dozens of funded trading accounts across multiple prop firms with live broker streaming, automated risk enforcement, copy trading, and a full trading journal.*
+*ניהול עשרות חשבונות מסחר במימון פרופ-פירם עם סטרימינג ברוקר חי, אכיפת סיכון אוטומטית, העתקת מסחר ויומן מסחר מלא.*
 
 [![Node](https://img.shields.io/badge/Node-24.x-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -53,7 +53,7 @@ Arabic, Spanish).
 **Vertex Command** היא פלטפורמת SaaS פ‏ול-סטאק לסוחרי פרופ-פירם רציניים המנהלים
 חשבונות מומנים רבים בו-זמנית. מתחברת ישירות ל-**Tradovate**, **TopstepX
 (ProjectX)** ו-**Rithmic**, מזרימה פוזיציות והון בזמן אמת, ואוכפת אוטומטית
-כללי drawdown — סוגרת חשבונות בשוק ברגע שמזוהה חריגה.
+כללי drawdown סוגרת חשבונות בשוק ברגע שמזוהה חריגה.
 
 מעבר לביצוע, הפלטפורמה כוללת **יומן מסחר** מלא, **מנוע אנליטיקה** מבוסס
 Pandas, **העתקת מסחר** עם פיזור מבוקר-סיכון, **קליטת אותות TradingView**,
@@ -92,13 +92,13 @@ Pandas, **העתקת מסחר** עם פיזור מבוקר-סיכון, **קלי�
 
 ## 🧱 Tech Stack
 
-**Frontend** — React 19 · Vite 7 · Tailwind CSS v4 · shadcn/ui (Radix) · Framer Motion · Recharts · lightweight-charts · React Three Fiber · Zustand · TanStack Query · wouter · react-i18next
+**Frontend** React 19 · Vite 7 · Tailwind CSS v4 · shadcn/ui (Radix) · Framer Motion · Recharts · lightweight-charts · React Three Fiber · Zustand · TanStack Query · wouter · react-i18next
 
-**Backend** — Node.js + Express 5 · TypeScript · Drizzle ORM · PostgreSQL 15 · WebSocket (`ws`) · Passport (local) · express-session + connect-pg-simple · Zod
+**Backend** Node.js + Express 5 · TypeScript · Drizzle ORM · PostgreSQL 15 · WebSocket (`ws`) · Passport (local) · express-session + connect-pg-simple · Zod
 
-**Services** — Python FastAPI + Pandas (analytics) · Stripe · Gmail API · OpenAI · Google Identity Services (Sign-In)
+**Services** Python FastAPI + Pandas (analytics) · Stripe · Gmail API · OpenAI · Google Identity Services (Sign-In)
 
-**Infra** — Vercel (frontend SPA) · single VPS via Docker Compose (multi-stage) · Nginx (WAF + TLS, Let's Encrypt) · GitHub Actions CI/CD (SSH deploy)
+**Infra** Vercel (frontend SPA) · single VPS via Docker Compose (multi-stage) · Nginx (WAF + TLS, Let's Encrypt) · GitHub Actions CI/CD (SSH deploy)
 
 ---
 
@@ -163,7 +163,7 @@ npm run db:push
 ```bash
 npm run dev
 ```
-App serves on **http://localhost:5000** (Express + Vite middleware — API and SPA on one port).
+App serves on **http://localhost:5000** (Express + Vite middleware API and SPA on one port).
 
 | Endpoint | Purpose |
 |---|---|
@@ -216,11 +216,11 @@ App serves on **http://localhost:5000** (Express + Vite middleware — API and S
 
 **26 tables** across 5 Drizzle schema files:
 
-- **Core** — users, firms, firm_tiers, accounts, withdrawals, balance_history, alerts, monthly_reports, audit_log, settings, risk_interventions, equity_ticks
-- **Integrations** — integration_providers, integration_connections, integration_accounts, imported_trades, sync_jobs, sync_logs
-- **Billing** — plans, subscriptions, invoices, payment_methods, billing_events
-- **Copy Trading** — copy_trading_groups, copy_trading_followers, copy_trading_orders, signal_mappings, processed_signals
-- **Journal** — journal_entries, journal_psychology, journal_daily_summary, playbooks, trade_tags, trade_screenshots, …
+- **Core** users, firms, firm_tiers, accounts, withdrawals, balance_history, alerts, monthly_reports, audit_log, settings, risk_interventions, equity_ticks
+- **Integrations** integration_providers, integration_connections, integration_accounts, imported_trades, sync_jobs, sync_logs
+- **Billing** plans, subscriptions, invoices, payment_methods, billing_events
+- **Copy Trading** copy_trading_groups, copy_trading_followers, copy_trading_orders, signal_mappings, processed_signals
+- **Journal** journal_entries, journal_psychology, journal_daily_summary, playbooks, trade_tags, trade_screenshots, …
 
 ---
 
