@@ -19,6 +19,13 @@
 
 ---
 
+> 📁 **Repository shape.** The application lives in the **`Vertex_Command-main/`** subdirectory,
+> not at the repo root. Every `npm` command below is run from inside it. The root holds only the
+> Vercel build config ([`vercel.json`](vercel.json), which builds that subdirectory), the CI
+> workflow in [`.github/workflows/`](.github/workflows), a preview video, and this project's
+> lifecycle files — [`STATUS.md`](STATUS.md), [`DECISIONS.md`](DECISIONS.md),
+> [`PROGRESS.md`](PROGRESS.md), [`CLAUDE_MEMORY.md`](CLAUDE_MEMORY.md).
+
 ## 🌍 Overview · סקירה
 
 <table>
@@ -133,8 +140,10 @@ flowchart TD
 
 ### 1. Install dependencies
 ```bash
+cd Vertex_Command-main
 npm install
 ```
+> All commands from here on run from `Vertex_Command-main/`.
 
 ### 2. Configure environment
 ```bash
@@ -189,38 +198,43 @@ App serves on **http://localhost:5000** (Express + Vite middleware API and SPA o
 
 ```
 .
-├── client/              # React 19 SPA (pages, components, hooks, stores, i18n)
-├── server/              # Express API, broker clients, engines, routes
-│   ├── index.ts             # Bootstrap (CORS, sessions, routes, startup tasks)
-│   ├── routes.ts            # Core API + auth
-│   ├── encryption.ts        # AES-256-GCM at rest
-│   ├── rule-engine.ts       # Account status / drawdown / priority
-│   ├── risk-enforcer.ts     # Emergency auto-flatten on breach
-│   ├── copy-trading-engine.ts
-│   ├── tradovate-* / topstepx-* / rithmic-*   # Broker clients + streaming
-│   └── ...
-├── shared/              # Drizzle schema (core, integrations, billing, copy, journal)
-├── analytics/           # Python FastAPI + Pandas microservice
-├── infra/vps/           # Single-VPS scripts: provision.sh (hardening), deploy.sh
-├── nginx/               # Ingress / WAF config + TLS bootstrap
-├── migrations/          # SQL migrations
-├── vercel.json          # Vercel SPA config (framework vite, dist/public, SPA rewrite)
-├── Dockerfile           # Multi-stage app image
-├── docker-compose.yml       # Backend stack (5 services: postgres + app + analytics + nginx + certbot)
-└── docker-compose.dev.yml   # Dev PostgreSQL only
+├── vercel.json          # Repo-root Vercel config — builds the subdirectory below
+├── .github/workflows/   # production.yml — type-check, audit, gated SSH deploy
+├── STATUS.md · DECISIONS.md · PROGRESS.md · CLAUDE_MEMORY.md   # lifecycle log
+├── vartex-command-preview.mp4
+└── Vertex_Command-main/ # ◀ the application
+    ├── client/          # React 19 SPA (pages, components, hooks, stores, i18n)
+    ├── server/          # Express API, broker clients, engines, routes
+    │   ├── index.ts     # Bootstrap (CORS, sessions, routes, startup tasks)
+    │   ├── routes.ts    # Core API + auth
+    │   ├── encryption.ts        # AES-256-GCM at rest
+    │   ├── rule-engine.ts       # Account status / drawdown / priority
+    │   ├── risk-enforcer.ts     # Emergency auto-flatten on breach
+    │   ├── copy-trading-engine.ts
+    │   ├── tradovate-* / topstepx-* / rithmic-*   # Broker clients + streaming
+    │   └── ...
+    ├── shared/          # Drizzle schema (core, integrations, billing, copy, journal)
+    ├── analytics/       # Python FastAPI + Pandas microservice
+    ├── infra/vps/       # Single-VPS scripts: provision.sh (hardening), deploy.sh
+    ├── nginx/           # Ingress / WAF config + TLS bootstrap
+    ├── migrations/      # SQL migrations
+    ├── vercel.json      # App-level Vercel config
+    ├── Dockerfile       # Multi-stage app image
+    ├── docker-compose.yml      # Backend stack (postgres + app + analytics + nginx + certbot)
+    └── docker-compose.dev.yml  # Dev PostgreSQL only
 ```
 
 ---
 
 ## 🗄️ Data Model
 
-**26 tables** across 5 Drizzle schema files:
+**45 tables** across 5 Drizzle schema files in `Vertex_Command-main/shared/`:
 
-- **Core** users, firms, firm_tiers, accounts, withdrawals, balance_history, alerts, monthly_reports, audit_log, settings, risk_interventions, equity_ticks
-- **Integrations** integration_providers, integration_connections, integration_accounts, imported_trades, sync_jobs, sync_logs
-- **Billing** plans, subscriptions, invoices, payment_methods, billing_events
-- **Copy Trading** copy_trading_groups, copy_trading_followers, copy_trading_orders, signal_mappings, processed_signals
-- **Journal** journal_entries, journal_psychology, journal_daily_summary, playbooks, trade_tags, trade_screenshots, …
+- **Core** (17) users, firms, firm_tiers, accounts, withdrawals, balance_history, alerts, monthly_reports, security_events, audit_log, settings, referral_codes, referrals, risk_interventions, equity_ticks, linked_users, market_data_cache
+- **Integrations** (6) integration_providers, integration_connections, integration_accounts, imported_trades, sync_jobs, sync_logs
+- **Billing** (5) plans, subscriptions, invoices, payment_methods, billing_events
+- **Copy Trading** (7) copy_trading_connections, copy_trading_connection_accounts, copy_trading_groups, copy_trading_followers, copy_trading_orders, signal_mappings, processed_signals
+- **Journal** (10) journal_entries, journal_psychology, journal_daily_summary, trading_goals, shared_reports, journal_alerts, playbooks, trade_tags, trade_screenshots, journal_alert_settings
 
 ---
 
@@ -289,7 +303,7 @@ curl -k https://localhost/api/health                                         # 2
 
 ### C · Google Sign-In
 
-Add `https://syncer-q.vercel.app` to **Authorized JavaScript origins** in Google Cloud Console (GIS ID-token flow needs no redirect URI). See `GOOGLE_SIGNIN_SETUP.md`.
+Add `https://syncer-q.vercel.app` to **Authorized JavaScript origins** in Google Cloud Console (GIS ID-token flow needs no redirect URI). See [`Vertex_Command-main/GOOGLE_SIGNIN_SETUP.md`](Vertex_Command-main/GOOGLE_SIGNIN_SETUP.md).
 
 ### CI/CD
 
@@ -299,7 +313,7 @@ Add `https://syncer-q.vercel.app` to **Authorized JavaScript origins** in Google
 
 ## 📄 License
 
-[MIT](LICENSE) © Vertex Command
+[MIT](Vertex_Command-main/LICENSE) © Vertex Command
 
 <div align="center">
 
